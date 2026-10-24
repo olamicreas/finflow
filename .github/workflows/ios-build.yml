@@ -1,4 +1,4 @@
-name: iOS Build & Submit
+name: Build iOS and Submit to TestFlight
 
 on:
   push:
@@ -12,40 +12,81 @@ jobs:
     name: Build iOS and Submit to TestFlight
     runs-on: macos-15
     steps:
-      - name: Checkout Code
+      - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: "Setup Node"
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 22.x
           cache: 'npm'
 
-      - name: Setup Xcode
+      - name: "Setup Xcode"
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: "16.1"
+          xcode-version: '16.1'
 
-      - name: Install dependencies
-        run: npm ci || npm install
+      - name: "Install Project Dependencies"
+        run: |
+          npm install
+          npm install -g eas-cli
 
-      - name: Setup Expo and EAS CLI
-        run: npm install -g eas-cli
+      - name: "Configure Sandbox Environment & Bypasses"
+        run: |
+          # 1. Prevent SPM Rate Limiting & SSH Hangs
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git config --global url."https://".insteadOf "git://"
+          
+          # 2. Inject Sandbox Variables into eas.json
+          node -e "
+          const fs = require('fs');
+          const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
+          eas.build = eas.build || {};
+          eas.build.production = eas.build.production || {};
+          eas.build.production.env = eas.build.production.env || {};
+          
+          // User traps bypasses
+          eas.build.production.env.EXPO_USE_SPM = '0';
+          eas.build.production.env.ENABLE_USER_SCRIPT_SANDBOXING = 'NO';
+          
+          // Give Xcode the exact absolute path to Node.js
+          eas.build.production.env.NODE_BINARY = process.execPath;
+          eas.build.production.env.EXPO_DEBUG = '1';
+          
+          fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2));
+          console.log('Successfully injected build-from-source flags into eas.json');
+          "
 
-      - name: Build for iOS (Local on Runner - Zero EAS credits consumed)
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: EAS_NO_VCS=1 eas build --platform ios --local --non-interactive --output=./finflow.ipa
-
-      - name: Upload IPA Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: finflow-ios-ipa
-          path: ./finflow.ipa
-
-      - name: Submit to TestFlight
-        if: env.EXPO_TOKEN != ''
+      - name: "Build iOS Locally on Free Runner (Zero EAS Credits)"
+        run: EAS_NO_VCS=1 eas build --platform ios --local --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EXPO_APPLE_ID: ${{ secrets.EXPO_APPLE_ID }}
-        run: eas submit --platform ios --path ./finflow.ipa --non-interactive
+
+      - name: "Upload Expo Build Log"
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: expo-build-log
+          path: /tmp/expo_build.log
+
+      - name: "Submit to App Store Connect"
+        run: |
+          IPA_FILE=$(find . -name "*.ipa" | head -n 1)
+          if [ -n "$IPA_FILE" ]; then
+            echo "Found IPA: $IPA_FILE. Submitting to TestFlight..."
+            npx eas submit --platform ios --path "$IPA_FILE" --non-interactive
+          else
+            echo "No IPA file found to submit."
+            exit 1
+          fi
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_APPLE_ID: ${{ secrets.EXPO_APPLE_ID }}
+
+      - name: "Save .ipa File"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FinFlow-iOS
+          path: '*.ipa'
