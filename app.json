@@ -14,11 +14,14 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "LSRequiresIPhoneOS": true,
-        "UIDeviceFamily": [1]
+        "UIDeviceFamily": [
+          1
+        ]
       }
     },
     "plugins": [
-      "./plugins/withDisableMac.js"
+      "./plugins/withDisableMac.js",
+      "expo-font"
     ],
     "android": {
       "adaptiveIcon": {
