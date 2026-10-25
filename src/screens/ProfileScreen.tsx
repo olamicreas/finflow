@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../theme/colors";
@@ -16,6 +17,11 @@ import { api } from "../api/client";
 export const ProfileScreen: React.FC = () => {
   const { user, virtualAccount, logout, showToast } = useFinFlow();
   const [pinModalVisible, setPinModalVisible] = useState(false);
+
+  const isAdmin =
+    user?.email?.toLowerCase().includes("developer") ||
+    user?.email?.toLowerCase().includes("admin") ||
+    Boolean((user as any)?.is_superuser);
 
   const handleUpdatePin = async (newPin: string) => {
     setPinModalVisible(false);
@@ -164,6 +170,34 @@ export const ProfileScreen: React.FC = () => {
             Active
           </Text>
         </TouchableOpacity>
+
+        {/* Admin Portal shortcut for authorized admin/owner accounts */}
+        {isAdmin && (
+          <TouchableOpacity
+            style={[
+              styles.rowItem,
+              {
+                backgroundColor: "rgba(99, 102, 241, 0.08)",
+                borderRadius: 14,
+                paddingHorizontal: 12,
+                marginVertical: 8,
+              },
+            ]}
+            onPress={() => Linking.openURL("https://ngnflow.com/finflow/admin")}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.iconCircle, { backgroundColor: "#6366F1" }]}>
+              <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" />
+            </View>
+            <View style={styles.rowMid}>
+              <Text style={[styles.rowTitle, { color: "#6366F1", fontWeight: "700" }]}>
+                Admin Portal
+              </Text>
+              <Text style={styles.rowSub}>View Platform Profits & Ledger</Text>
+            </View>
+            <Ionicons name="open-outline" size={18} color="#6366F1" />
+          </TouchableOpacity>
+        )}
 
         {/* Sign Out Button */}
         <TouchableOpacity

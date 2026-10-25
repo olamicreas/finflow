@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.olamicreas.finflow",
-      "buildNumber": "1",
+      "buildNumber": "8",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "LSRequiresIPhoneOS": true,

@@ -66,9 +66,6 @@ export interface TransactionItemData {
   reference: string;
   status: string;
   narration: string;
-  earnings_amount?: number;
-  earnings_percentage?: number;
-  earnings_currency?: string;
   created_at: string;
 }
 

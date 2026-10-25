@@ -61,16 +61,6 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const hasCard = cards.length > 0;
   const months = ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
 
-  const totalEarningsNGN = transactions.reduce((acc, tx) => {
-    if (tx.earnings_amount && tx.earnings_amount > 0) {
-      if (tx.earnings_currency === "USD") {
-        return acc + tx.earnings_amount * 1520;
-      }
-      return acc + tx.earnings_amount;
-    }
-    return acc;
-  }, 0);
-
   return (
     <ScrollView
       style={styles.container}
@@ -355,26 +345,6 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
           </View>
         </View>
 
-        {/* OWNER EARNINGS KPI PILL */}
-        {totalEarningsNGN > 0 && (
-          <View style={styles.earningsSummaryCard}>
-            <View style={styles.earningsSummaryLeft}>
-              <View style={styles.earningsIconCircle}>
-                <Ionicons name="trending-up" size={14} color="#059669" />
-              </View>
-              <View>
-                <Text style={styles.earningsSummaryLabel}>Total Platform Profit</Text>
-                <Text style={styles.earningsSummaryAmount}>
-                  +₦{totalEarningsNGN.toLocaleString()}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.earningsAvgBadge}>
-              <Text style={styles.earningsAvgText}>Earnings Active</Text>
-            </View>
-          </View>
-        )}
-
         <View style={styles.transactionsList}>
           {transactions.length === 0 ? (
             <View style={{ paddingVertical: 32, alignItems: "center", justifyContent: "center" }}>
@@ -390,13 +360,9 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
                 key={tx.id}
                 transaction={tx}
                 onPress={() => {
-                  const earnDetails =
-                    tx.earnings_amount && tx.earnings_amount > 0
-                      ? `\n\n💰 Platform Profit: +${tx.earnings_currency === "USD" ? "$" : "₦"}${tx.earnings_amount.toLocaleString()}\n📈 Margin: +${tx.earnings_percentage}%`
-                      : "";
                   Alert.alert(
                     "Transaction Details",
-                    `Reference: ${tx.reference}\nDescription: ${tx.narration}\nAmount: ${tx.currency} ${tx.amount.toLocaleString()}\nStatus: ${tx.status.toUpperCase()}${earnDetails}`
+                    `Reference: ${tx.reference}\nDescription: ${tx.narration}\nAmount: ${tx.currency} ${tx.amount.toLocaleString()}\nStatus: ${tx.status.toUpperCase()}`
                   );
                 }}
               />
@@ -797,51 +763,5 @@ const styles = StyleSheet.create({
   },
   transactionsList: {
     marginTop: 2,
-  },
-  earningsSummaryCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "rgba(5, 150, 105, 0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(5, 150, 105, 0.2)",
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 8,
-  },
-  earningsSummaryLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  earningsIconCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "rgba(5, 150, 105, 0.16)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  earningsSummaryLabel: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: "#047857",
-  },
-  earningsSummaryAmount: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#065F46",
-  },
-  earningsAvgBadge: {
-    backgroundColor: "#059669",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-  },
-  earningsAvgText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#FFFFFF",
   },
 });

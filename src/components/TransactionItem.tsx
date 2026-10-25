@@ -56,19 +56,9 @@ export const TransactionItem: React.FC<Props> = ({ transaction, onPress }) => {
         <Text style={styles.title} numberOfLines={1}>
           {transaction.counterparty_name || transaction.narration}
         </Text>
-        <View style={styles.subRow}>
-          <Text style={styles.subText} numberOfLines={1}>
-            {formatDate(transaction.created_at)}
-          </Text>
-          {transaction.earnings_percentage !== undefined && transaction.earnings_percentage > 0 && (
-            <View style={styles.earningBadge}>
-              <Ionicons name="trending-up" size={10} color="#059669" />
-              <Text style={styles.earningBadgeText}>
-                +{transaction.earnings_percentage}%
-              </Text>
-            </View>
-          )}
-        </View>
+        <Text style={styles.subText} numberOfLines={1}>
+          {formatDate(transaction.created_at)}
+        </Text>
       </View>
 
       <View style={styles.rightCol}>
@@ -81,11 +71,6 @@ export const TransactionItem: React.FC<Props> = ({ transaction, onPress }) => {
           {isPositive ? "+" : "-"}
           {formattedAmount}
         </Text>
-        {transaction.earnings_amount !== undefined && transaction.earnings_amount > 0 && (
-          <Text style={styles.earningGainText}>
-            gain +{transaction.earnings_currency === "USD" ? `$${transaction.earnings_amount.toFixed(2)}` : `₦${transaction.earnings_amount.toLocaleString()}`}
-          </Text>
-        )}
       </View>
     </TouchableOpacity>
   );
@@ -122,26 +107,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: Colors.textOnSheetMuted,
   },
-  subRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 1,
-  },
-  earningBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(5, 150, 105, 0.12)",
-    paddingVertical: 1,
-    paddingHorizontal: 6,
-    borderRadius: 6,
-    gap: 3,
-  },
-  earningBadgeText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#059669",
-  },
   rightCol: {
     alignItems: "flex-end",
     marginLeft: 10,
@@ -155,11 +120,5 @@ const styles = StyleSheet.create({
   },
   amountNegative: {
     color: Colors.danger,
-  },
-  earningGainText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#059669",
-    marginTop: 2,
   },
 });
