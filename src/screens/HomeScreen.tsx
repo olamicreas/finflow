@@ -36,6 +36,7 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
     transactions,
     refreshData,
     showToast,
+    setAddMoneyModalVisible,
   } = useFinFlow();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -175,7 +176,7 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.quickActionRow}>
           <TouchableOpacity
             style={[styles.quickPill, styles.quickPillPrimary]}
-            onPress={() => navigation.navigate("Receive")}
+            onPress={() => setAddMoneyModalVisible(true)}
             activeOpacity={0.8}
           >
             <Ionicons name="add" size={15} color="#FFFFFF" />

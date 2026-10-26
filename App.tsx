@@ -18,13 +18,14 @@ import { ReceiveMoneyScreen } from "./src/screens/ReceiveMoneyScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { BillsScreen } from "./src/screens/BillsScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
+import { AddMoneyModal } from "./src/components/AddMoneyModal";
 
-type TabType = "Home" | "Cards" | "Bills" | "Send" | "Receive" | "Profile";
+type TabType = "Home" | "Cards" | "Bills" | "Send" | "Profile";
 
 const MainApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>("Home");
   const [initialBillCat, setInitialBillCat] = useState<"airtime" | "data" | "electricity" | "cable">("airtime");
-  const { isAuthenticated, toastMessage } = useFinFlow();
+  const { isAuthenticated, toastMessage, addMoneyModalVisible, setAddMoneyModalVisible } = useFinFlow();
 
   if (!isAuthenticated) {
     return (
@@ -44,10 +45,14 @@ const MainApp: React.FC = () => {
   const renderScreen = () => {
     const navigationHelper = {
       navigate: (screen: string, params?: { category?: "airtime" | "data" | "electricity" | "cable" }) => {
+        if (screen === "Receive" || screen === "Add") {
+          setAddMoneyModalVisible(true);
+          return;
+        }
         if (screen === "Bills" && params?.category) {
           setInitialBillCat(params.category);
         }
-        if (["Home", "Cards", "Bills", "Send", "Receive", "Profile"].includes(screen)) {
+        if (["Home", "Cards", "Bills", "Send", "Profile"].includes(screen)) {
           setActiveTab(screen as TabType);
         }
       },
@@ -62,8 +67,6 @@ const MainApp: React.FC = () => {
         return <BillsScreen navigation={navigationHelper} initialCategory={initialBillCat} />;
       case "Send":
         return <SendMoneyScreen />;
-      case "Receive":
-        return <ReceiveMoneyScreen />;
       case "Profile":
         return <ProfileScreen />;
       default:
@@ -76,7 +79,6 @@ const MainApp: React.FC = () => {
     { id: "Cards", label: "Cards", icon: "card-outline" },
     { id: "Bills", label: "Bills", icon: "flash-outline" },
     { id: "Send", label: "Send", icon: "paper-plane-outline" },
-    { id: "Receive", label: "Add", icon: "add-circle-outline" },
     { id: "Profile", label: "Profile", icon: "person-outline" },
   ];
 
@@ -91,6 +93,12 @@ const MainApp: React.FC = () => {
           <Text style={styles.toastText}>{toastMessage}</Text>
         </View>
       )}
+
+      {/* Instant Add Money Modal */}
+      <AddMoneyModal
+        visible={addMoneyModalVisible}
+        onClose={() => setAddMoneyModalVisible(false)}
+      />
 
       {/* Active Screen View */}
       <View style={styles.screenContainer}>{renderScreen()}</View>

@@ -1,17 +1,19 @@
 {
   "expo": {
-    "name": "FinFlow",
-    "slug": "finflow",
+    "name": "CreasPay",
+    "slug": "creaspay",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "scheme": "finflow",
+    "scheme": "creaspay",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.olamicreas.finflow",
-      "buildNumber": "8",
+      "buildNumber": "9",
       "infoPlist": {
+        "CFBundleDisplayName": "CreasPay",
+        "NSFaceIDUsageDescription": "Use Face ID to securely log in to your CreasPay account.",
         "ITSAppUsesNonExemptEncryption": false,
         "LSRequiresIPhoneOS": true,
         "UIDeviceFamily": [

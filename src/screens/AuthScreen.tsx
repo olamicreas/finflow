@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import { Colors } from "../theme/colors";
 import { useFinFlow } from "../context/FinFlowContext";
 
 export const AuthScreen: React.FC = () => {
-  const { login, register } = useFinFlow();
+  const { login, register, canUseBiometrics, loginWithBiometrics } = useFinFlow();
 
   const [mode, setMode] = useState<"login" | "register">("login");
   const [loading, setLoading] = useState(false);
@@ -31,6 +31,15 @@ export const AuthScreen: React.FC = () => {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [bvn, setBvn] = useState("");
   const [passcode, setPasscode] = useState("");
+
+  useEffect(() => {
+    if (canUseBiometrics && mode === "login") {
+      const timer = setTimeout(() => {
+        loginWithBiometrics();
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [canUseBiometrics, mode]);
 
   const handleSwitchMode = (newMode: "login" | "register") => {
     setMode(newMode);
@@ -124,8 +133,8 @@ export const AuthScreen: React.FC = () => {
               <Ionicons name="card" size={24} color={Colors.primary} />
             </View>
             <View>
-              <Text style={styles.brandTitle}>FINFLOW</Text>
-              <Text style={styles.brandSubtitle}>DEVELOPMENT BANKING & USD CARDS</Text>
+              <Text style={styles.brandTitle}>CREASPAY</Text>
+              <Text style={styles.brandSubtitle}>INSTANT BANKING & VIRTUAL USD CARDS</Text>
             </View>
           </View>
 
@@ -240,7 +249,7 @@ export const AuthScreen: React.FC = () => {
               <Ionicons name="mail-outline" size={18} color={Colors.textOnSheetMuted} style={styles.inputIcon} />
               <TextInput
                 style={styles.textInput}
-                placeholder="name@finflow.app"
+                placeholder="name@creaspay.com"
                 placeholderTextColor="#9CA3AF"
                 value={email}
                 onChangeText={setEmail}
@@ -313,15 +322,27 @@ export const AuthScreen: React.FC = () => {
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
               <Text style={styles.submitButtonText}>
-                {mode === "login" ? "Sign In to FinFlow" : "Create Clean Account"}
+                {mode === "login" ? "Sign In to CreasPay" : "Create Account"}
               </Text>
             )}
           </TouchableOpacity>
 
+          {/* Real Biometric Login Button */}
+          {canUseBiometrics && mode === "login" && (
+            <TouchableOpacity
+              style={styles.biometricBtn}
+              onPress={loginWithBiometrics}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="finger-print" size={22} color={Colors.primary} />
+              <Text style={styles.biometricBtnText}>Sign In with Face ID / Biometrics</Text>
+            </TouchableOpacity>
+          )}
+
           {/* Switch Prompt */}
           <View style={styles.switchRow}>
             <Text style={styles.switchPromptText}>
-              {mode === "login" ? "Don't have an account yet?" : "Already have a FinFlow account?"}
+              {mode === "login" ? "Don't have an account yet?" : "Already have a CreasPay account?"}
             </Text>
             <TouchableOpacity
               onPress={() => handleSwitchMode(mode === "login" ? "register" : "login")}
@@ -331,29 +352,6 @@ export const AuthScreen: React.FC = () => {
               </Text>
             </TouchableOpacity>
           </View>
-
-          {/* Quick Fill for Fast Testing */}
-          <TouchableOpacity
-            style={styles.quickFillPill}
-            onPress={() => {
-              if (mode === "login") {
-                setEmail("developer@finflow.app");
-                setPassword("Password123!");
-              } else {
-                setFullName("David Adeleke");
-                setEmail("davido@finflow.app");
-                setPhoneNumber("+2348039876543");
-                setPassword("Password123!");
-                setPasscode("5555");
-              }
-            }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="flash-outline" size={13} color={Colors.primary} />
-            <Text style={styles.quickFillText}>
-              {mode === "login" ? "Fill registered developer account" : "Fill sample signup details"}
-            </Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -565,23 +563,22 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.primary,
   },
-  quickFillPill: {
+  biometricBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255, 30, 117, 0.08)",
-    paddingVertical: 9,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    marginTop: 18,
-    alignSelf: "center",
+    backgroundColor: "rgba(16, 185, 129, 0.08)",
     borderWidth: 1,
-    borderColor: "rgba(255, 30, 117, 0.2)",
-    gap: 6,
+    borderColor: "rgba(16, 185, 129, 0.25)",
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+    marginTop: 12,
+    gap: 8,
   },
-  quickFillText: {
-    fontSize: 12,
+  biometricBtnText: {
+    fontSize: 14,
     fontWeight: "700",
-    color: Colors.primary,
+    color: "#059669",
   },
 });

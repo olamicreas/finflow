@@ -30,6 +30,7 @@ export const CardsScreen: React.FC = () => {
     user,
     refreshData,
     showToast,
+    setAddMoneyModalVisible,
   } = useFinFlow();
 
   const [unmaskedDetails, setUnmaskedDetails] = useState<any>(null);
@@ -132,16 +133,20 @@ export const CardsScreen: React.FC = () => {
       try {
         const amt = parseFloat(newCardAmount) || 5;
         await api.createCard({
-          name: newCardName.trim() || user?.full_name?.toUpperCase() || "FINFLOW USER",
+          name: newCardName.trim() || user?.full_name?.toUpperCase() || "CREASPAY USER",
           amount: amt,
           card_theme: "obsidian",
           passcode: pin,
         });
         setCreateModalVisible(false);
         await refreshData();
-        showToast("USD card created");
+        showToast("USD card created successfully!");
       } catch (err: any) {
-        Alert.alert("Issuance Error", err.message);
+        const isInsufficient = (err.message || "").toLowerCase().includes("insufficient");
+        Alert.alert(
+          isInsufficient ? "Insufficient Balance" : "Card Issuance Error",
+          err.message || "Failed to create virtual USD card. Please try again."
+        );
       }
     } else if (passcodeAction === "fund" && activeCard) {
       try {
@@ -399,6 +404,24 @@ export const CardsScreen: React.FC = () => {
             <TouchableOpacity
               style={styles.modalActionBtn}
               onPress={() => {
+                const ngnBal = ngnWallet?.balance ?? 0;
+                if (ngnBal < totalCreateNgn) {
+                  Alert.alert(
+                    "Insufficient Balance",
+                    `You need at least ₦${totalCreateNgn.toLocaleString(undefined, { minimumFractionDigits: 2 })} to create and fund this card ($${initialAmountParsed.toFixed(2)} initial balance + $${CARD_CREATION_FEE_USD.toFixed(2)} issuance fee).\n\nYour current Naira balance is ₦${ngnBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}. Please top up your wallet to continue.`,
+                    [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Add Money",
+                        onPress: () => {
+                          setCreateModalVisible(false);
+                          setAddMoneyModalVisible(true);
+                        },
+                      },
+                    ]
+                  );
+                  return;
+                }
                 setPasscodeAction("create");
                 setPasscodeModalVisible(true);
               }}

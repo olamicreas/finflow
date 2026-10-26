@@ -1,5 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as LocalAuthentication from "expo-local-authentication";
 import { api, setAuthToken } from "../api/client";
+
+const STORAGE_TOKEN_KEY = "@creaspay_auth_token";
+const STORAGE_USER_KEY = "@creaspay_user_profile";
+const STORAGE_BIOMETRIC_KEY = "@creaspay_biometric_enabled";
 
 export interface UserProfile {
   id: string;
@@ -86,6 +92,14 @@ interface FinFlowContextType {
   register: (payload: any) => Promise<void>;
   logout: () => void;
   refreshData: () => Promise<void>;
+  // Real Biometric Features
+  canUseBiometrics: boolean;
+  isBiometricEnabled: boolean;
+  loginWithBiometrics: () => Promise<boolean>;
+  toggleBiometrics: (enabled: boolean) => Promise<void>;
+  // Quick Add Money Modal State
+  addMoneyModalVisible: boolean;
+  setAddMoneyModalVisible: (visible: boolean) => void;
 }
 
 const FinFlowContext = createContext<FinFlowContextType | undefined>(undefined);
@@ -99,6 +113,32 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [transactions, setTransactions] = useState<TransactionItemData[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Biometric state
+  const [canUseBiometrics, setCanUseBiometrics] = useState<boolean>(false);
+  const [isBiometricEnabled, setIsBiometricEnabled] = useState<boolean>(true);
+
+  // Add Money Modal state
+  const [addMoneyModalVisible, setAddMoneyModalVisible] = useState<boolean>(false);
+
+  // Initialize Biometrics & check for saved credentials on app launch
+  useEffect(() => {
+    const initBiometrics = async () => {
+      try {
+        const hasHw = await LocalAuthentication.hasHardwareAsync();
+        const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+        const bioSetting = await AsyncStorage.getItem(STORAGE_BIOMETRIC_KEY);
+        const bioActive = bioSetting !== "false";
+        setIsBiometricEnabled(bioActive);
+
+        const savedToken = await AsyncStorage.getItem(STORAGE_TOKEN_KEY);
+        setCanUseBiometrics(hasHw && isEnrolled && !!savedToken && bioActive);
+      } catch (e) {
+        console.warn("Failed to check biometrics:", e);
+      }
+    };
+    initBiometrics();
+  }, [user]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -126,7 +166,7 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setActiveCard(null);
       }
     } catch (err: any) {
-      console.warn("Error refreshing FinFlow data:", err.message);
+      console.warn("Error refreshing CreasPay data:", err.message);
     }
   };
 
@@ -136,6 +176,11 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const res = await api.login(email, pass);
       setAuthToken(res.access_token);
       setUser(res.user);
+
+      // Persist for instant biometric access
+      await AsyncStorage.setItem(STORAGE_TOKEN_KEY, res.access_token);
+      await AsyncStorage.setItem(STORAGE_USER_KEY, JSON.stringify(res.user));
+
       await refreshData();
       showToast(`Welcome back, ${res.user.full_name.split(" ")[0]}!`);
     } finally {
@@ -149,6 +194,11 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const res = await api.register(payload);
       setAuthToken(res.access_token);
       setUser(res.user);
+
+      // Persist for instant biometric access
+      await AsyncStorage.setItem(STORAGE_TOKEN_KEY, res.access_token);
+      await AsyncStorage.setItem(STORAGE_USER_KEY, JSON.stringify(res.user));
+
       await refreshData();
       showToast("Account created successfully!");
     } finally {
@@ -156,7 +206,70 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  const logout = () => {
+  const loginWithBiometrics = async (): Promise<boolean> => {
+    try {
+      const hasHw = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!hasHw || !isEnrolled) {
+        showToast("Biometric sensor not enrolled on this device.");
+        return false;
+      }
+
+      const savedToken = await AsyncStorage.getItem(STORAGE_TOKEN_KEY);
+      const savedUserStr = await AsyncStorage.getItem(STORAGE_USER_KEY);
+      if (!savedToken || !savedUserStr) {
+        return false;
+      }
+
+      const authRes = await LocalAuthentication.authenticateAsync({
+        promptMessage: "Sign in to CreasPay",
+        fallbackLabel: "Use Password",
+        cancelLabel: "Cancel",
+        disableDeviceFallback: false,
+      });
+
+      if (authRes.success) {
+        setAuthToken(savedToken);
+        const parsedUser = JSON.parse(savedUserStr);
+        setUser(parsedUser);
+
+        // Fetch fresh profile in background
+        api.getMe().then((fresh) => {
+          if (fresh) {
+            setUser(fresh);
+            AsyncStorage.setItem(STORAGE_USER_KEY, JSON.stringify(fresh));
+          }
+        }).catch(() => {});
+
+        await refreshData();
+        showToast(`Welcome back, ${parsedUser.full_name.split(" ")[0]}!`);
+        return true;
+      }
+      return false;
+    } catch (err: any) {
+      console.warn("Biometric login failed:", err.message);
+      return false;
+    }
+  };
+
+  const toggleBiometrics = async (enabled: boolean) => {
+    if (enabled) {
+      // Prompt user to verify biometrics before enabling
+      const res = await LocalAuthentication.authenticateAsync({
+        promptMessage: "Verify Face ID / Fingerprint to enable",
+        fallbackLabel: "Cancel",
+      });
+      if (!res.success) {
+        showToast("Biometric verification cancelled.");
+        return;
+      }
+    }
+    setIsBiometricEnabled(enabled);
+    await AsyncStorage.setItem(STORAGE_BIOMETRIC_KEY, enabled ? "true" : "false");
+    showToast(enabled ? "Biometric login enabled" : "Biometric login disabled");
+  };
+
+  const logout = async () => {
     setAuthToken(null);
     setUser(null);
     setWallets([]);
@@ -164,6 +277,8 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setActiveCard(null);
     setVirtualAccount(null);
     setTransactions([]);
+    await AsyncStorage.removeItem(STORAGE_TOKEN_KEY);
+    await AsyncStorage.removeItem(STORAGE_USER_KEY);
   };
 
   const ngnWallet = wallets.find((w) => w.currency === "NGN") || wallets[0];
@@ -187,6 +302,12 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
         register,
         logout,
         refreshData,
+        canUseBiometrics,
+        isBiometricEnabled,
+        loginWithBiometrics,
+        toggleBiometrics,
+        addMoneyModalVisible,
+        setAddMoneyModalVisible,
       }}
     >
       {children}
@@ -201,3 +322,7 @@ export const useFinFlow = () => {
   }
   return context;
 };
+
+// Aliases for CreasPay branding
+export const CreasPayProvider = FinFlowProvider;
+export const useCreasPay = useFinFlow;
