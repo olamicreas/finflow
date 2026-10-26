@@ -16,6 +16,7 @@ import { formatNGN, formatUSD } from "../utils/formatters";
 import { useFinFlow } from "../context/FinFlowContext";
 import { VirtualCardView } from "../components/VirtualCardView";
 import { PasscodeModal } from "../components/PasscodeModal";
+import { CreasPayLogo } from "../components/CreasPayLogo";
 import { api } from "../api/client";
 
 const LIVE_FX_RATE = 1520.0;
@@ -211,7 +212,7 @@ export const CardsScreen: React.FC = () => {
             </View>
           </View>
 
-          <Text style={styles.topNavTitle}>Bank</Text>
+          <CreasPayLogo size={28} showText textSize={18} textColor="#FFFFFF" />
 
           <View style={styles.avatarBtn}>
             <View style={styles.avatarInnerAccent} />

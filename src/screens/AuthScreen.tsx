@@ -13,6 +13,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../theme/colors";
 import { useFinFlow } from "../context/FinFlowContext";
+import { CreasPayLogo } from "../components/CreasPayLogo";
 
 export const AuthScreen: React.FC = () => {
   const { login, register, canUseBiometrics, loginWithBiometrics } = useFinFlow();
@@ -129,9 +130,7 @@ export const AuthScreen: React.FC = () => {
         <View style={styles.darkHeader}>
           {/* Brand Badge */}
           <View style={styles.brandBadge}>
-            <View style={styles.brandIconBox}>
-              <Ionicons name="card" size={24} color={Colors.primary} />
-            </View>
+            <CreasPayLogo size={46} />
             <View>
               <Text style={styles.brandTitle}>CREASPAY</Text>
               <Text style={styles.brandSubtitle}>INSTANT BANKING & VIRTUAL USD CARDS</Text>

@@ -16,6 +16,7 @@ import { formatNGN } from "../utils/formatters";
 import { useFinFlow } from "../context/FinFlowContext";
 import { TransactionItem } from "../components/TransactionItem";
 import { ArtisticCardArt } from "../components/ArtisticCardArt";
+import { CreasPayLogo } from "../components/CreasPayLogo";
 
 interface Props {
   navigation: {
@@ -94,7 +95,7 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
             </View>
           </TouchableOpacity>
 
-          <Text style={styles.topNavTitle}>Bank</Text>
+          <CreasPayLogo size={28} showText textSize={18} textColor="#FFFFFF" />
 
           <TouchableOpacity
             style={styles.avatarBtn}

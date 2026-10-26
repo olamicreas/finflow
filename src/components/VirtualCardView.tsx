@@ -13,6 +13,7 @@ import { Colors } from "../theme/colors";
 import { formatCardPan, formatUSD } from "../utils/formatters";
 import { VirtualCardItem } from "../context/FinFlowContext";
 import { ArtisticCardArt } from "./ArtisticCardArt";
+import { CreasPayLogo } from "./CreasPayLogo";
 
 interface Props {
   card: VirtualCardItem;
@@ -70,8 +71,19 @@ export const VirtualCardView: React.FC<Props> = ({
         >
           <ArtisticCardArt variant={isFrozen ? "frozen" : "default"} />
 
-          {/* Top Row: •••• 6544 on left, VISA on right over Pink Blob */}
+          {/* Top Row: CreasPay Brand Logo on left, VISA on right */}
           <View style={styles.topRow}>
+            <CreasPayLogo size={22} showText textSize={15} textColor="#FFFFFF" />
+            <Text style={styles.visaLogo}>VISA</Text>
+          </View>
+
+          {/* Middle Row: Balance Label + Large USD Balance on left, PAN on right */}
+          <View style={styles.middleRow}>
+            <View style={styles.balanceBlock}>
+              <Text style={styles.balanceLabel}>Balance</Text>
+              <Text style={styles.balanceValue}>{formatUSD(card.balance)}</Text>
+            </View>
+
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={() =>
@@ -97,14 +109,6 @@ export const VirtualCardView: React.FC<Props> = ({
                 />
               )}
             </TouchableOpacity>
-
-            <Text style={styles.visaLogo}>VISA</Text>
-          </View>
-
-          {/* Middle Section: Balance Label + Large USD Balance */}
-          <View style={styles.balanceBlock}>
-            <Text style={styles.balanceLabel}>Balance</Text>
-            <Text style={styles.balanceValue}>{formatUSD(card.balance)}</Text>
           </View>
 
           {/* Bottom Row: Cardholder, Expiry & CVV */}
@@ -220,6 +224,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  middleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    marginTop: 4,
   },
   panTouch: {
     flexDirection: "row",

@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../theme/colors";
 import { useFinFlow } from "../context/FinFlowContext";
 import { PasscodeModal } from "../components/PasscodeModal";
+import { CreasPayLogo } from "../components/CreasPayLogo";
 import { api } from "../api/client";
 
 export const ProfileScreen: React.FC = () => {
@@ -48,7 +49,7 @@ export const ProfileScreen: React.FC = () => {
             </View>
           </View>
 
-          <Text style={styles.topNavTitle}>Profile</Text>
+          <CreasPayLogo size={24} showText textSize={17} textColor="#FFFFFF" />
 
           <View style={styles.avatarBtnSmall}>
             <View style={styles.avatarInnerAccentSmall} />
@@ -63,15 +64,15 @@ export const ProfileScreen: React.FC = () => {
             <Ionicons name="person" size={30} color="#FFFFFF" />
           </View>
           <Text style={styles.userName}>
-            {user?.full_name || "Alex Morgan"}
+            {user?.full_name || "Abdul Quayyum"}
           </Text>
           <Text style={styles.userEmail}>
-            {user?.email || "user@finflow.app"}
+            {user?.email || "user@creaspay.com"}
           </Text>
 
           <View style={styles.verifiedPill}>
-            <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
-            <Text style={styles.verifiedPillText}>Tier 2 Verified</Text>
+            <CreasPayLogo size={14} />
+            <Text style={styles.verifiedPillText}>CreasPay Verified • Tier 2</Text>
           </View>
         </View>
       </View>
@@ -96,7 +97,7 @@ export const ProfileScreen: React.FC = () => {
           <View style={styles.rowMid}>
             <Text style={styles.rowTitle}>Naira Account Number</Text>
             <Text style={styles.rowSub}>
-              {virtualAccount?.bank_name || "Wema Bank (ALAT)"}
+              {virtualAccount?.bank_name || "Providus Bank"}
             </Text>
           </View>
           <Text style={styles.rowRightVal}>
@@ -110,7 +111,7 @@ export const ProfileScreen: React.FC = () => {
           </View>
           <View style={styles.rowMid}>
             <Text style={styles.rowTitle}>Card Network</Text>
-            <Text style={styles.rowSub}>Global Online Payments</Text>
+            <Text style={styles.rowSub}>CreasPay USD Virtual Visa</Text>
           </View>
           <Text style={styles.rowRightVal}>VISA</Text>
         </View>
@@ -177,6 +178,14 @@ export const ProfileScreen: React.FC = () => {
         >
           <Text style={styles.logoutText}>Sign Out</Text>
         </TouchableOpacity>
+
+        {/* CreasPay Brand Footer */}
+        <View style={styles.brandFooter}>
+          <CreasPayLogo size={20} showText textSize={14} textColor={Colors.textOnSheetMuted} />
+          <Text style={styles.brandFooterText}>
+            CreasPay v1.0.0 • Verified Bitnob USD Issuance
+          </Text>
+        </View>
       </View>
 
       <PasscodeModal
@@ -394,5 +403,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
     color: Colors.danger,
+  },
+  brandFooter: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 24,
+    marginBottom: 8,
+    gap: 6,
+  },
+  brandFooterText: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: Colors.textOnSheetMuted,
   },
 });

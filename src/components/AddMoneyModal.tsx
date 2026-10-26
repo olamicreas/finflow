@@ -12,6 +12,7 @@ import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { Colors } from "../theme/colors";
 import { useFinFlow } from "../context/FinFlowContext";
+import { CreasPayLogo } from "./CreasPayLogo";
 
 interface Props {
   visible: boolean;
@@ -51,9 +52,7 @@ export const AddMoneyModal: React.FC<Props> = ({ visible, onClose }) => {
           {/* Header */}
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
-              <View style={styles.iconCircle}>
-                <Ionicons name="arrow-down-circle" size={24} color={Colors.primary} />
-              </View>
+              <CreasPayLogo size={42} />
               <View>
                 <Text style={styles.title}>Add Money</Text>
                 <Text style={styles.subtitle}>Instant Bank Transfer</Text>
