@@ -22,7 +22,7 @@ C_GOLD = hex_to_rgb("#FFB800")        # Digital Gold Spark
 C_GOLD_LIGHT = hex_to_rgb("#FFE885")  # Radiant Gold Core
 
 def render_raw_emblem(W, H):
-    """Renders the mathematical CP ribbon emblem and golden spark at high resolution."""
+    """Renders the mathematical CP ribbon emblem at high resolution with pure minimalist precision."""
     cx, cy = W // 2, H // 2
     emblem = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     edraw = ImageDraw.Draw(emblem)
@@ -101,30 +101,7 @@ def render_raw_emblem(W, H):
         y = p_loop_cy + p_r * math.sin(rad)
         edraw.circle((x, y), radius=stroke_r, fill=(*color, 255))
 
-    # 5. Golden radiant star spark at optical focal point
-    spark_cx = cx - int(W * 0.005)
-    spark_cy = cy + int(H * 0.015)
-    spark_size = int(W * 0.065)
-
-    points = []
-    for ray in range(8):
-        angle = ray * (math.pi / 4)
-        r = spark_size if ray % 2 == 0 else int(spark_size * 0.28)
-        points.append((spark_cx + r * math.cos(angle), spark_cy + r * math.sin(angle)))
-
-    spark_glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    sg_draw = ImageDraw.Draw(spark_glow)
-    for gr in range(int(spark_size * 2.0), 0, -8):
-        alpha = int(95 * (1 - gr / (spark_size * 2.0)))
-        sg_draw.ellipse([spark_cx - gr, spark_cy - gr, spark_cx + gr, spark_cy + gr], fill=(*C_GOLD, alpha))
-    spark_glow = spark_glow.filter(ImageFilter.GaussianBlur(30))
-    emblem = Image.alpha_composite(emblem, spark_glow)
-
-    edraw = ImageDraw.Draw(emblem)
-    edraw.polygon(points, fill=(*C_GOLD_LIGHT, 255))
-    edraw.circle((spark_cx, spark_cy), radius=int(spark_size * 0.16), fill=(255, 255, 255, 255))
-
-    # 6. Auto-Center with Mathematical Precision
+    # 5. Auto-Center with Mathematical Precision
     bbox = emblem.getbbox()
     emb_cx = (bbox[0] + bbox[2]) / 2.0
     emb_cy = (bbox[1] + bbox[3]) / 2.0
