@@ -17,18 +17,20 @@ import { CreasPayLogo } from "./CreasPayLogo";
 interface Props {
   visible: boolean;
   onClose: () => void;
+  onNavigateToProfile?: () => void;
 }
 
-export const AddMoneyModal: React.FC<Props> = ({ visible, onClose }) => {
+export const AddMoneyModal: React.FC<Props> = ({ visible, onClose, onNavigateToProfile }) => {
   const { virtualAccount, user, showToast } = useFinFlow();
 
   const bankName = virtualAccount?.bank_name || "Providus Bank";
-  const accountNumber = virtualAccount?.account_number || "0067100155";
+  const accountNumber = virtualAccount?.account_number || "";
   const accountName =
     virtualAccount?.account_name ||
     `CREASPAY / ${(user?.full_name || "VALUED CUSTOMER").toUpperCase()}`;
 
   const handleCopy = async () => {
+    if (!accountNumber) return;
     await Clipboard.setStringAsync(accountNumber);
     try {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -37,6 +39,7 @@ export const AddMoneyModal: React.FC<Props> = ({ visible, onClose }) => {
   };
 
   const handleShare = async () => {
+    if (!accountNumber) return;
     try {
       await Share.share({
         title: "CreasPay Bank Account Details",
@@ -67,68 +70,93 @@ export const AddMoneyModal: React.FC<Props> = ({ visible, onClose }) => {
             </TouchableOpacity>
           </View>
 
-          {/* Dedicated Virtual Account Card */}
-          <View style={styles.accountCard}>
-            <View style={styles.accountCardHeader}>
-              <View style={styles.livePill}>
-                <View style={styles.liveDot} />
-                <Text style={styles.livePillText}>BITNOB INSTANT RAILS</Text>
+          {!virtualAccount ? (
+            <View style={styles.unverifiedCard}>
+              <View style={styles.unverifiedIconBox}>
+                <Ionicons name="alert-circle-outline" size={32} color="#F59E0B" />
               </View>
-              <Text style={styles.zeroFeeBadge}>0% Fee</Text>
-            </View>
-
-            <Text style={styles.fieldLabel}>Bank Name</Text>
-            <Text style={styles.bankNameValue}>{bankName}</Text>
-
-            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Account Number</Text>
-            <View style={styles.accountNumRow}>
-              <Text style={styles.accountNumValue} selectable>
-                {accountNumber}
+              <Text style={styles.unverifiedTitle}>Verification Required</Text>
+              <Text style={styles.unverifiedDesc}>
+                To generate your dedicated Providus Bank account, please add your BVN & Date of Birth in your Profile KYC section.
               </Text>
               <TouchableOpacity
-                style={styles.copyPill}
-                onPress={handleCopy}
-                activeOpacity={0.7}
+                style={styles.unverifiedBtn}
+                onPress={() => {
+                  onClose();
+                  if (onNavigateToProfile) onNavigateToProfile();
+                }}
+                activeOpacity={0.85}
               >
-                <Ionicons name="copy-outline" size={15} color="#FFFFFF" />
-                <Text style={styles.copyPillText}>Copy</Text>
+                <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.unverifiedBtnText}>Complete KYC in Profile</Text>
               </TouchableOpacity>
             </View>
+          ) : (
+            <>
+              {/* Dedicated Virtual Account Card */}
+              <View style={styles.accountCard}>
+                <View style={styles.accountCardHeader}>
+                  <View style={styles.livePill}>
+                    <View style={styles.liveDot} />
+                    <Text style={styles.livePillText}>BITNOB INSTANT RAILS</Text>
+                  </View>
+                  <Text style={styles.zeroFeeBadge}>0% Fee</Text>
+                </View>
 
-            <View style={styles.cardDivider} />
+                <Text style={styles.fieldLabel}>Bank Name</Text>
+                <Text style={styles.bankNameValue}>{bankName}</Text>
 
-            <Text style={styles.fieldLabel}>Beneficiary Name</Text>
-            <Text style={styles.accountNameValue}>{accountName}</Text>
-          </View>
+                <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Account Number</Text>
+                <View style={styles.accountNumRow}>
+                  <Text style={styles.accountNumValue} selectable>
+                    {accountNumber}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.copyPill}
+                    onPress={handleCopy}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="copy-outline" size={15} color="#FFFFFF" />
+                    <Text style={styles.copyPillText}>Copy</Text>
+                  </TouchableOpacity>
+                </View>
 
-          {/* Explanation Notes */}
-          <View style={styles.infoBox}>
-            <Ionicons name="shield-checkmark" size={18} color="#10B981" style={{ marginTop: 1 }} />
-            <Text style={styles.infoText}>
-              Transfer from any Nigerian banking app or USSD code. Your CreasPay wallet balance will update automatically in seconds.
-            </Text>
-          </View>
+                <View style={styles.cardDivider} />
 
-          {/* Action Buttons */}
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={styles.shareBtn}
-              onPress={handleShare}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="share-outline" size={18} color={Colors.textOnSheet} />
-              <Text style={styles.shareBtnText}>Share Details</Text>
-            </TouchableOpacity>
+                <Text style={styles.fieldLabel}>Beneficiary Name</Text>
+                <Text style={styles.accountNameValue}>{accountName}</Text>
+              </View>
 
-            <TouchableOpacity
-              style={styles.primaryCopyBtn}
-              onPress={handleCopy}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="copy" size={18} color="#FFFFFF" />
-              <Text style={styles.primaryCopyBtnText}>Copy Account</Text>
-            </TouchableOpacity>
-          </View>
+              {/* Explanation Notes */}
+              <View style={styles.infoBox}>
+                <Ionicons name="shield-checkmark" size={18} color="#10B981" style={{ marginTop: 1 }} />
+                <Text style={styles.infoText}>
+                  Transfer from any Nigerian banking app or USSD code. Your CreasPay wallet balance will update automatically in seconds.
+                </Text>
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={styles.shareBtn}
+                  onPress={handleShare}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="share-outline" size={18} color={Colors.textOnSheet} />
+                  <Text style={styles.shareBtnText}>Share Details</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.primaryCopyBtn}
+                  onPress={handleCopy}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="copy" size={18} color="#FFFFFF" />
+                  <Text style={styles.primaryCopyBtnText}>Copy Account</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
         </View>
       </View>
     </Modal>
@@ -338,6 +366,56 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   primaryCopyBtnText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  unverifiedCard: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    padding: 24,
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  unverifiedIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "rgba(245, 158, 11, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  unverifiedTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: Colors.textOnSheet,
+    marginBottom: 6,
+  },
+  unverifiedDesc: {
+    fontSize: 13,
+    color: Colors.textOnSheetMuted,
+    textAlign: "center",
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  unverifiedBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    width: "100%",
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+  },
+  unverifiedBtnText: {
     fontSize: 14,
     fontWeight: "800",
     color: "#FFFFFF",

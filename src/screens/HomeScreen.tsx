@@ -112,7 +112,7 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
           <Text style={styles.totalBalanceLabel}>Total Balance</Text>
           <Text style={styles.totalBalanceValue}>{formatNGN(ngnBalance)}</Text>
 
-          {virtualAccount && (
+          {virtualAccount ? (
             <TouchableOpacity
               style={styles.vaCopyPill}
               onPress={handleCopyVA}
@@ -127,6 +127,28 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
                 color={Colors.primary}
                 style={{ marginLeft: 6 }}
               />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.kycWarningBanner}
+              onPress={() => navigation.navigate("Profile", { openKyc: true })}
+              activeOpacity={0.85}
+            >
+              <View style={styles.kycWarningIconBadge}>
+                <MaterialCommunityIcons name="shield-alert" size={18} color="#F59E0B" />
+              </View>
+              <View style={styles.kycWarningContent}>
+                <View style={styles.kycWarningTopRow}>
+                  <Text style={styles.kycWarningTitle}>Verification Needed</Text>
+                  <View style={styles.kycActionBadge}>
+                    <Text style={styles.kycActionBadgeText}>Complete KYC</Text>
+                  </View>
+                </View>
+                <Text style={styles.kycWarningSubtitle} numberOfLines={2}>
+                  Add your BVN & Date of Birth to generate your Providus Bank account.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#F59E0B" style={{ marginLeft: 6 }} />
             </TouchableOpacity>
           )}
         </View>
@@ -467,6 +489,59 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     color: Colors.textSecondary,
+  },
+  kycWarningBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.35)",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    marginTop: 12,
+    marginHorizontal: 12,
+  },
+  kycWarningIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(245, 158, 11, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+  },
+  kycWarningContent: {
+    flex: 1,
+  },
+  kycWarningTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 2,
+    gap: 8,
+  },
+  kycWarningTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FBBF24",
+  },
+  kycActionBadge: {
+    backgroundColor: "rgba(245, 158, 11, 0.25)",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  kycActionBadgeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#F59E0B",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  kycWarningSubtitle: {
+    fontSize: 11,
+    color: "rgba(255, 255, 255, 0.75)",
+    lineHeight: 15,
   },
   waveChartContainer: {
     marginTop: 6,

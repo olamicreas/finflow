@@ -98,6 +98,10 @@ const MainApp: React.FC = () => {
       <AddMoneyModal
         visible={addMoneyModalVisible}
         onClose={() => setAddMoneyModalVisible(false)}
+        onNavigateToProfile={() => {
+          setAddMoneyModalVisible(false);
+          setActiveTab("Profile");
+        }}
       />
 
       {/* Active Screen View */}

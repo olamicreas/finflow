@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../theme/colors";
@@ -31,7 +32,13 @@ export const AuthScreen: React.FC = () => {
   const [fullName, setFullName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [bvn, setBvn] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [passcode, setPasscode] = useState("");
+
+  // Date of Birth Modal Alert State (Bitnob Requirement for BVN Virtual Account)
+  const [dobModalVisible, setDobModalVisible] = useState(false);
+  const [dobModalInput, setDobModalInput] = useState("");
+  const [dobModalError, setDobModalError] = useState<string | null>(null);
 
   useEffect(() => {
     if (canUseBiometrics && mode === "login") {
@@ -65,13 +72,31 @@ export const AuthScreen: React.FC = () => {
     }
   };
 
-  const handleRegister = async () => {
+  const formatDobInput = (text: string) => {
+    const digits = text.replace(/\D/g, "").slice(0, 8);
+    if (digits.length <= 4) return digits;
+    if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+    return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+  };
+
+  const validateDob = (d: string) => {
+    const regex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!regex.test(d)) return false;
+    const [year, month, day] = d.split("-").map(Number);
+    if (year < 1920 || year > 2012) return false;
+    if (month < 1 || month > 12) return false;
+    if (day < 1 || day > 31) return false;
+    return true;
+  };
+
+  const handleRegister = async (overrideDob?: string, skipBvn = false) => {
     setErrorMessage(null);
     const cleanEmail = email.trim();
     const cleanName = fullName.trim();
     const cleanPhone = phoneNumber.trim();
-    const cleanBvn = bvn.trim();
+    const cleanBvn = skipBvn ? "" : bvn.trim();
     const cleanPin = passcode.trim();
+    const activeDob = (overrideDob !== undefined ? overrideDob : dateOfBirth).trim();
 
     if (!cleanName || cleanName.length < 2) {
       setErrorMessage("Please enter your legal full name.");
@@ -86,7 +111,7 @@ export const AuthScreen: React.FC = () => {
       return;
     }
     if (cleanBvn && cleanBvn.length !== 11) {
-      setErrorMessage("BVN must be exactly 11 digits (or leave blank for standard verification).");
+      setErrorMessage("BVN must be exactly 11 digits (or leave blank to verify later).");
       return;
     }
     if (!password || password.length < 6) {
@@ -98,6 +123,17 @@ export const AuthScreen: React.FC = () => {
       return;
     }
 
+    // USER REQUIREMENT: When BVN is provided, Date of Birth is required to instantly
+    // create the Providus Virtual Account via Bitnob. Show modal if not provided.
+    if (cleanBvn && cleanBvn.length === 11 && !skipBvn) {
+      if (!activeDob || !validateDob(activeDob)) {
+        setDobModalInput(activeDob);
+        setDobModalError(null);
+        setDobModalVisible(true);
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       await register({
@@ -107,12 +143,31 @@ export const AuthScreen: React.FC = () => {
         password: password,
         passcode: cleanPin,
         bvn: cleanBvn || undefined,
+        date_of_birth: (cleanBvn && activeDob) ? activeDob : undefined,
       });
+      setDobModalVisible(false);
     } catch (err: any) {
       setErrorMessage(err.message || "Failed to create account. Please try again.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleConfirmDobModal = () => {
+    if (!validateDob(dobModalInput)) {
+      setDobModalError("Please enter a valid date in YYYY-MM-DD format (e.g. 1995-05-12).");
+      return;
+    }
+    setDobModalError(null);
+    setDateOfBirth(dobModalInput);
+    handleRegister(dobModalInput, false);
+  };
+
+  const handleSkipBvnModal = () => {
+    setDobModalVisible(false);
+    setBvn("");
+    setDateOfBirth("");
+    handleRegister("", true);
   };
 
   return (
@@ -223,7 +278,7 @@ export const AuthScreen: React.FC = () => {
               <View style={styles.inputGroup}>
                 <View style={styles.labelRow}>
                   <Text style={styles.inputLabel}>11-Digit BVN</Text>
-                  <Text style={styles.optionalBadge}>Optional for KYC</Text>
+                  <Text style={styles.optionalBadge}>Instant Bank Account</Text>
                 </View>
                 <View style={styles.inputBox}>
                   <Ionicons name="shield-checkmark-outline" size={18} color={Colors.textOnSheetMuted} style={styles.inputIcon} />
@@ -232,12 +287,44 @@ export const AuthScreen: React.FC = () => {
                     placeholder="e.g. 22234567890"
                     placeholderTextColor="#9CA3AF"
                     value={bvn}
-                    onChangeText={setBvn}
+                    onChangeText={(val) => {
+                      setBvn(val);
+                      if (val.length === 11 && !dateOfBirth) {
+                        setDobModalInput("");
+                        setDobModalError(null);
+                        setDobModalVisible(true);
+                      }
+                    }}
                     keyboardType="number-pad"
                     maxLength={11}
                   />
                 </View>
               </View>
+
+              {/* Date of Birth (Required if BVN is entered) */}
+              {bvn.length > 0 && (
+                <View style={styles.inputGroup}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.inputLabel}>Date of Birth</Text>
+                    <Text style={styles.dobBadge}>Required for BVN</Text>
+                  </View>
+                  <View style={styles.inputBox}>
+                    <Ionicons name="calendar-outline" size={18} color={Colors.primary} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="YYYY-MM-DD (e.g. 1995-05-12)"
+                      placeholderTextColor="#9CA3AF"
+                      value={dateOfBirth}
+                      onChangeText={(val) => setDateOfBirth(formatDobInput(val))}
+                      keyboardType="number-pad"
+                      maxLength={10}
+                    />
+                  </View>
+                  <Text style={styles.fieldHelper}>
+                    Format: YYYY-MM-DD. Needed by Bitnob to generate Providus Bank account.
+                  </Text>
+                </View>
+              )}
             </>
           )}
 
@@ -313,7 +400,7 @@ export const AuthScreen: React.FC = () => {
           {/* ACTION SUBMIT BUTTON */}
           <TouchableOpacity
             style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-            onPress={mode === "login" ? handleLogin : handleRegister}
+            onPress={mode === "login" ? handleLogin : () => handleRegister()}
             disabled={loading}
             activeOpacity={0.85}
           >
@@ -353,6 +440,74 @@ export const AuthScreen: React.FC = () => {
           </View>
         </View>
       </ScrollView>
+
+      {/* BITNOB BVN DATE OF BIRTH MODAL ALERT */}
+      <Modal
+        visible={dobModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDobModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalIconBox}>
+                <Ionicons name="calendar" size={26} color={Colors.primary} />
+              </View>
+
+              <Text style={styles.modalTitle}>Date of Birth Required</Text>
+              <Text style={styles.modalDescription}>
+                To immediately create your Providus Bank account with your BVN, Bitnob requires your Date of Birth exactly as registered with your bank.
+              </Text>
+
+              {dobModalError ? (
+                <View style={styles.modalErrorBanner}>
+                  <Ionicons name="alert-circle" size={16} color="#EF4444" />
+                  <Text style={styles.modalErrorText}>{dobModalError}</Text>
+                </View>
+              ) : null}
+
+              <View style={styles.modalInputGroup}>
+                <Text style={styles.modalInputLabel}>DATE OF BIRTH (YYYY-MM-DD)</Text>
+                <View style={styles.modalInputBox}>
+                  <Ionicons name="calendar-outline" size={18} color={Colors.primary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.modalTextInput}
+                    placeholder="YYYY-MM-DD (e.g. 1995-05-12)"
+                    placeholderTextColor="#9CA3AF"
+                    value={dobModalInput}
+                    onChangeText={(t) => setDobModalInput(formatDobInput(t))}
+                    keyboardType="number-pad"
+                    maxLength={10}
+                    autoFocus
+                  />
+                </View>
+                <Text style={styles.modalHint}>Enter Year-Month-Day (e.g. 1995-05-12)</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.modalPrimaryBtn}
+                onPress={handleConfirmDobModal}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.modalPrimaryBtnText}>Confirm & Create Bank Account</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalSecondaryBtn}
+                onPress={handleSkipBvnModal}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalSecondaryBtnText}>Skip BVN & Verify Later</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -497,6 +652,16 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: Colors.textOnSheetMuted,
   },
+  dobBadge: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: Colors.primary,
+  },
+  fieldHelper: {
+    fontSize: 11,
+    color: Colors.textOnSheetMuted,
+    marginTop: 4,
+  },
   pinHelper: {
     fontSize: 11,
     fontWeight: "600",
@@ -579,5 +744,133 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: "#059669",
+  },
+  // Date of Birth Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalBackdrop: {
+    width: "100%",
+    maxWidth: 420,
+  },
+  modalCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 24,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "rgba(255, 30, 117, 0.12)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: Colors.textOnSheet,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  modalDescription: {
+    fontSize: 13,
+    color: Colors.textOnSheetMuted,
+    textAlign: "center",
+    lineHeight: 19,
+    marginBottom: 18,
+  },
+  modalErrorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEE2E2",
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+    width: "100%",
+    gap: 6,
+  },
+  modalErrorText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#B91C1C",
+  },
+  modalInputGroup: {
+    width: "100%",
+    marginBottom: 18,
+  },
+  modalInputLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: Colors.textOnSheetMuted,
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  modalInputBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 50,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+  },
+  modalTextInput: {
+    flex: 1,
+    fontSize: 15,
+    color: Colors.textOnSheet,
+    fontWeight: "600",
+    letterSpacing: 1,
+  },
+  modalHint: {
+    fontSize: 11,
+    color: Colors.textOnSheetMuted,
+    marginTop: 5,
+    marginLeft: 2,
+  },
+  modalPrimaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.primary,
+    borderRadius: 16,
+    height: 50,
+    width: "100%",
+    marginBottom: 10,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  modalPrimaryBtnText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  modalSecondaryBtn: {
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+  },
+  modalSecondaryBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: Colors.textOnSheetMuted,
   },
 });

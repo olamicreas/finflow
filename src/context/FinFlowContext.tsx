@@ -14,6 +14,8 @@ export interface UserProfile {
   phone_number?: string;
   kyc_tier: number;
   kyc_status: string;
+  bvn?: string;
+  date_of_birth?: string;
   bitnob_customer_id?: string;
 }
 
