@@ -315,7 +315,7 @@ export const BillsScreen: React.FC<Props> = ({
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={[styles.scrollContent, { paddingBottom: 60 }]}
+      contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
       automaticallyAdjustKeyboardInsets={true}
       keyboardDismissMode="on-drag"
@@ -1096,7 +1096,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 34,
     paddingTop: 10,
     paddingHorizontal: 20,
-    paddingBottom: 36,
+    paddingBottom: Platform.OS === "ios" ? 44 : 28,
     minHeight: 580,
   },
   sheetHandle: {

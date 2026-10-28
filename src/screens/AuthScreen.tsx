@@ -524,7 +524,6 @@ export const AuthScreen: React.FC = () => {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 28 : 0}
     >
       {/* Top Ambient Glow Matching ss.mp4 */}
       <LinearGradient
@@ -540,7 +539,7 @@ export const AuthScreen: React.FC = () => {
       >
         <View style={styles.contentWrap}>
           {/* Top Bar with Step Indicators */}
-          <View style={styles.topBar}>
+          <View style={[styles.topBar, mode === "login" && { justifyContent: "flex-end" }]}>
             {mode === "register" ? (
               <View style={styles.progressRow}>
                 {[1, 2, 3, 4, 5].map((s) => (
@@ -561,7 +560,7 @@ export const AuthScreen: React.FC = () => {
                 setMode(mode === "login" ? "register" : "login");
                 if (mode === "login") setStep(1);
               }}
-              style={styles.modeSwitchBtn}
+              style={[styles.modeSwitchBtn, { marginLeft: "auto" }]}
               activeOpacity={0.7}
             >
               <Text style={styles.modeSwitchText}>
