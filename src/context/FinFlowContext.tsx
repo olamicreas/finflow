@@ -224,7 +224,7 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
           const formatted = diff.toLocaleString(undefined, { minimumFractionDigits: 2 });
           showToast(`₦${formatted} Received • Balance Updated`);
-          notificationService.triggerLocalNotification(
+          notificationService.triggerAlert(
             "Money Received!",
             `Your CreasPay account was credited with ₦${formatted}.`,
             { type: "deposit", amount: diff }
@@ -246,7 +246,7 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (latestTx.status === "successful") {
               await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
               showToast(`${latestTx.narration || "Utility purchase"} Successful!`);
-              notificationService.triggerLocalNotification(
+              notificationService.triggerAlert(
                 "Utility Delivered",
                 `${latestTx.narration || "Payment"} completed successfully.`,
                 { type: "bill" }
@@ -271,9 +271,6 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // 3. High-Frequency Real-Time Auto-Sync Engine (Every 5 seconds while active)
   useEffect(() => {
     if (!user || isAppLocked) return;
-
-    // Register push token with backend on launch
-    notificationService.registerForPushNotificationsAsync();
 
     // Initial silent sync
     syncDataSilently();
