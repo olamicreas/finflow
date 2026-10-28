@@ -399,7 +399,7 @@ export const AuthScreen: React.FC = () => {
               Set a strong account password and a 4-digit PIN for instant transfers and card issuance.
             </Text>
 
-            <View style={styles.securityGroup}>
+            <View style={[styles.securityGroup, { marginTop: 16 }]}>
               <Text style={styles.inputMiniLabel}>LOGIN PASSWORD (MIN 6 CHARS)</Text>
               <View style={styles.securityInputBox}>
                 <TextInput
@@ -808,14 +808,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#8E8E93",
     lineHeight: 20,
-    marginBottom: 32,
+    marginBottom: 28,
   },
   heroInputWrapper: {
     flexDirection: "row",
     alignItems: "center",
     borderBottomWidth: 1.5,
     borderBottomColor: "rgba(255, 255, 255, 0.16)",
-    paddingBottom: 10,
+    paddingBottom: 12,
+    marginTop: 20,
   },
   heroInput: {
     flex: 1,
