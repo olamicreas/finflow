@@ -80,7 +80,8 @@ jobs:
           IPA_FILE=$(find . -name "*.ipa" | head -n 1)
           if [ -n "$IPA_FILE" ]; then
             echo "Found IPA: $IPA_FILE. Submitting to TestFlight..."
-            npx eas submit --platform ios --path "$IPA_FILE" --non-interactive
+            npx eas submit --platform ios --path "$IPA_FILE" --non-interactive --verbose || \
+            (echo "Apple App Store Connect transient issue, retrying in 20 seconds..." && sleep 20 && npx eas submit --platform ios --path "$IPA_FILE" --non-interactive --verbose)
           else
             echo "No IPA file found to submit."
             exit 1

@@ -1,57 +1,146 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  ScrollView,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Modal,
+  ScrollView,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../theme/colors";
 import { useFinFlow } from "../context/FinFlowContext";
 import { CreasPayLogo } from "../components/CreasPayLogo";
 
+type AuthMode = "login" | "register";
+type RegisterStep = 1 | 2 | 3 | 4 | 5;
+
 export const AuthScreen: React.FC = () => {
   const { login, register, canUseBiometrics, loginWithBiometrics } = useFinFlow();
 
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<AuthMode>("register");
+  const [step, setStep] = useState<RegisterStep>(1);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Form Fields
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-
-  // Register Fields
   const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [bvn, setBvn] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [passcode, setPasscode] = useState("");
 
-  // Date of Birth Modal Alert State (Bitnob Requirement for BVN Virtual Account)
+  // Bitnob DOB Modal State
   const [dobModalVisible, setDobModalVisible] = useState(false);
   const [dobModalInput, setDobModalInput] = useState("");
   const [dobModalError, setDobModalError] = useState<string | null>(null);
+
+  const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (canUseBiometrics && mode === "login") {
       const timer = setTimeout(() => {
         loginWithBiometrics();
-      }, 600);
+      }, 500);
       return () => clearTimeout(timer);
     }
   }, [canUseBiometrics, mode]);
 
-  const handleSwitchMode = (newMode: "login" | "register") => {
-    setMode(newMode);
+  useEffect(() => {
+    // Focus active field when step changes
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [step, mode]);
+
+  const formatDobInput = (text: string) => {
+    const digits = text.replace(/\D/g, "").slice(0, 8);
+    if (digits.length <= 4) return digits;
+    if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+    return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+  };
+
+  const validateDob = (d: string) => {
+    const regex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!regex.test(d)) return false;
+    const [year, month, day] = d.split("-").map(Number);
+    if (year < 1920 || year > 2012) return false;
+    if (month < 1 || month > 12) return false;
+    if (day < 1 || day > 31) return false;
+    return true;
+  };
+
+  const isStepValid = (): boolean => {
+    switch (step) {
+      case 1:
+        return fullName.trim().length >= 2;
+      case 2:
+        return email.trim().includes("@") && email.trim().includes(".");
+      case 3:
+        return phoneNumber.trim().length >= 10;
+      case 4:
+        // BVN is optional. If entered, must be 11 digits and have valid DOB
+        if (bvn.trim().length === 0) return true;
+        return bvn.trim().length === 11 && validateDob(dateOfBirth.trim());
+      case 5:
+        return password.length >= 6 && passcode.trim().length === 4;
+      default:
+        return false;
+    }
+  };
+
+  const handleNextStep = () => {
     setErrorMessage(null);
+    if (step === 1) {
+      if (fullName.trim().length < 2) {
+        setErrorMessage("Please enter your legal full name.");
+        return;
+      }
+      setStep(2);
+    } else if (step === 2) {
+      if (!email.trim().includes("@") || !email.trim().includes(".")) {
+        setErrorMessage("Please enter a valid email address.");
+        return;
+      }
+      setStep(3);
+    } else if (step === 3) {
+      if (phoneNumber.trim().length < 10) {
+        setErrorMessage("Please enter a valid phone number.");
+        return;
+      }
+      setStep(4);
+    } else if (step === 4) {
+      const cleanBvn = bvn.trim();
+      if (cleanBvn.length > 0 && cleanBvn.length !== 11) {
+        setErrorMessage("BVN must be exactly 11 digits (or leave empty to verify later).");
+        return;
+      }
+      if (cleanBvn.length === 11 && !validateDob(dateOfBirth.trim())) {
+        setDobModalInput(dateOfBirth.trim());
+        setDobModalError(null);
+        setDobModalVisible(true);
+        return;
+      }
+      setStep(5);
+    } else if (step === 5) {
+      handleRegister();
+    }
+  };
+
+  const handlePrevStep = () => {
+    setErrorMessage(null);
+    if (step > 1) {
+      setStep((prev) => (prev - 1) as RegisterStep);
+    }
   };
 
   const handleLogin = async () => {
@@ -72,23 +161,6 @@ export const AuthScreen: React.FC = () => {
     }
   };
 
-  const formatDobInput = (text: string) => {
-    const digits = text.replace(/\D/g, "").slice(0, 8);
-    if (digits.length <= 4) return digits;
-    if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
-    return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
-  };
-
-  const validateDob = (d: string) => {
-    const regex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!regex.test(d)) return false;
-    const [year, month, day] = d.split("-").map(Number);
-    if (year < 1920 || year > 2012) return false;
-    if (month < 1 || month > 12) return false;
-    if (day < 1 || day > 31) return false;
-    return true;
-  };
-
   const handleRegister = async (overrideDob?: string, skipBvn = false) => {
     setErrorMessage(null);
     const cleanEmail = email.trim();
@@ -100,31 +172,35 @@ export const AuthScreen: React.FC = () => {
 
     if (!cleanName || cleanName.length < 2) {
       setErrorMessage("Please enter your legal full name.");
+      setStep(1);
       return;
     }
     if (!cleanEmail || !cleanEmail.includes("@") || !cleanEmail.includes(".")) {
       setErrorMessage("Please enter a valid email address.");
+      setStep(2);
       return;
     }
     if (!cleanPhone || cleanPhone.length < 10) {
-      setErrorMessage("Please enter a valid phone number (e.g. +2348012345678).");
+      setErrorMessage("Please enter a valid phone number.");
+      setStep(3);
       return;
     }
     if (cleanBvn && cleanBvn.length !== 11) {
-      setErrorMessage("BVN must be exactly 11 digits (or leave blank to verify later).");
+      setErrorMessage("BVN must be exactly 11 digits.");
+      setStep(4);
       return;
     }
     if (!password || password.length < 6) {
       setErrorMessage("Password must be at least 6 characters.");
+      setStep(5);
       return;
     }
     if (!cleanPin || cleanPin.length !== 4 || !/^\d{4}$/.test(cleanPin)) {
-      setErrorMessage("Please set a 4-digit numeric transaction security PIN.");
+      setErrorMessage("Please set a 4-digit numeric transaction PIN.");
+      setStep(5);
       return;
     }
 
-    // USER REQUIREMENT: When BVN is provided, Date of Birth is required to instantly
-    // create the Providus Virtual Account via Bitnob. Show modal if not provided.
     if (cleanBvn && cleanBvn.length === 11 && !skipBvn) {
       if (!activeDob || !validateDob(activeDob)) {
         setDobModalInput(activeDob);
@@ -143,7 +219,7 @@ export const AuthScreen: React.FC = () => {
         password: password,
         passcode: cleanPin,
         bvn: cleanBvn || undefined,
-        date_of_birth: (cleanBvn && activeDob) ? activeDob : undefined,
+        date_of_birth: cleanBvn && activeDob ? activeDob : undefined,
       });
       setDobModalVisible(false);
     } catch (err: any) {
@@ -155,188 +231,74 @@ export const AuthScreen: React.FC = () => {
 
   const handleConfirmDobModal = () => {
     if (!validateDob(dobModalInput)) {
-      setDobModalError("Please enter a valid date in YYYY-MM-DD format (e.g. 1995-05-12).");
+      setDobModalError("Format: YYYY-MM-DD (e.g. 1995-05-12).");
       return;
     }
     setDobModalError(null);
     setDateOfBirth(dobModalInput);
-    handleRegister(dobModalInput, false);
+    setDobModalVisible(false);
+    if (step === 4) {
+      setStep(5);
+    } else {
+      handleRegister(dobModalInput, false);
+    }
   };
 
   const handleSkipBvnModal = () => {
     setDobModalVisible(false);
     setBvn("");
     setDateOfBirth("");
-    handleRegister("", true);
+    if (step === 4) {
+      setStep(5);
+    } else {
+      handleRegister("", true);
+    }
   };
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.keyboardContainer}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* JET-BLACK HERO HEADER */}
-        <View style={styles.darkHeader}>
-          {/* Brand Badge */}
-          <View style={styles.brandBadge}>
-            <CreasPayLogo size={46} />
-            <View>
-              <Text style={styles.brandTitle}>CREASPAY</Text>
-              <Text style={styles.brandSubtitle}>INSTANT BANKING & VIRTUAL USD CARDS</Text>
-            </View>
-          </View>
+  // Render Multi-Step Signup Form
+  const renderRegisterContent = () => {
+    switch (step) {
+      case 1:
+        return (
+          <View style={styles.stepContainer}>
+            <Text style={styles.eyebrowText}>Let's get to know you</Text>
+            <Text style={styles.headlineText}>What do we call you?</Text>
+            <Text style={styles.subheadText}>
+              Enter your legal full name as registered on official identity documents.
+            </Text>
 
-          {/* Mode Switcher Tabs */}
-          <View style={styles.tabContainer}>
-            <TouchableOpacity
-              style={[styles.tabButton, mode === "login" && styles.tabButtonActive]}
-              onPress={() => handleSwitchMode("login")}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.tabText, mode === "login" && styles.tabTextActive]}>
-                Sign In
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.tabButton, mode === "register" && styles.tabButtonActive]}
-              onPress={() => handleSwitchMode("register")}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.tabText, mode === "register" && styles.tabTextActive]}>
-                Create Account
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* CRISP WHITE SHEET */}
-        <View style={styles.whiteSheet}>
-          <View style={styles.sheetHandle} />
-
-          <Text style={styles.sheetHeading}>
-            {mode === "login" ? "Welcome Back" : "Open Your Account"}
-          </Text>
-          <Text style={styles.sheetSubheading}>
-            {mode === "login"
-              ? "Access your NGN balances, USD cards, and real bank rails."
-              : "Dedicated NGN Virtual Account, instant KYC, and USD virtual cards."}
-          </Text>
-
-          {/* Error Banner */}
-          {errorMessage ? (
-            <View style={styles.errorBanner}>
-              <Ionicons name="alert-circle" size={18} color="#EF4444" />
-              <Text style={styles.errorText}>{errorMessage}</Text>
-            </View>
-          ) : null}
-
-          {/* FORM FIELDS */}
-          {mode === "register" && (
-            <>
-              {/* Full Name */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Full Legal Name</Text>
-                <View style={styles.inputBox}>
-                  <Ionicons name="person-outline" size={18} color={Colors.textOnSheetMuted} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="e.g. Samuel Adekunle"
-                    placeholderTextColor="#9CA3AF"
-                    value={fullName}
-                    onChangeText={setFullName}
-                    autoCapitalize="words"
-                    autoCorrect={false}
-                  />
-                </View>
-              </View>
-
-              {/* Phone Number */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Phone Number</Text>
-                <View style={styles.inputBox}>
-                  <Ionicons name="call-outline" size={18} color={Colors.textOnSheetMuted} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="+234 801 234 5678"
-                    placeholderTextColor="#9CA3AF"
-                    value={phoneNumber}
-                    onChangeText={setPhoneNumber}
-                    keyboardType="phone-pad"
-                    autoCapitalize="none"
-                  />
-                </View>
-              </View>
-
-              {/* BVN (Optional / Recommended) */}
-              <View style={styles.inputGroup}>
-                <View style={styles.labelRow}>
-                  <Text style={styles.inputLabel}>11-Digit BVN</Text>
-                  <Text style={styles.optionalBadge}>Instant Bank Account</Text>
-                </View>
-                <View style={styles.inputBox}>
-                  <Ionicons name="shield-checkmark-outline" size={18} color={Colors.textOnSheetMuted} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="e.g. 22234567890"
-                    placeholderTextColor="#9CA3AF"
-                    value={bvn}
-                    onChangeText={(val) => {
-                      setBvn(val);
-                      if (val.length === 11 && !dateOfBirth) {
-                        setDobModalInput("");
-                        setDobModalError(null);
-                        setDobModalVisible(true);
-                      }
-                    }}
-                    keyboardType="number-pad"
-                    maxLength={11}
-                  />
-                </View>
-              </View>
-
-              {/* Date of Birth (Required if BVN is entered) */}
-              {bvn.length > 0 && (
-                <View style={styles.inputGroup}>
-                  <View style={styles.labelRow}>
-                    <Text style={styles.inputLabel}>Date of Birth</Text>
-                    <Text style={styles.dobBadge}>Required for BVN</Text>
-                  </View>
-                  <View style={styles.inputBox}>
-                    <Ionicons name="calendar-outline" size={18} color={Colors.primary} style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="YYYY-MM-DD (e.g. 1995-05-12)"
-                      placeholderTextColor="#9CA3AF"
-                      value={dateOfBirth}
-                      onChangeText={(val) => setDateOfBirth(formatDobInput(val))}
-                      keyboardType="number-pad"
-                      maxLength={10}
-                    />
-                  </View>
-                  <Text style={styles.fieldHelper}>
-                    Format: YYYY-MM-DD. Needed by Bitnob to generate Providus Bank account.
-                  </Text>
-                </View>
-              )}
-            </>
-          )}
-
-          {/* Email Address */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Email Address</Text>
-            <View style={styles.inputBox}>
-              <Ionicons name="mail-outline" size={18} color={Colors.textOnSheetMuted} style={styles.inputIcon} />
+            <View style={styles.heroInputWrapper}>
               <TextInput
-                style={styles.textInput}
+                ref={inputRef}
+                style={styles.heroInput}
+                placeholder="Your Name"
+                placeholderTextColor="#3A3A3C"
+                value={fullName}
+                onChangeText={setFullName}
+                autoCapitalize="words"
+                autoCorrect={false}
+                maxLength={50}
+              />
+              <Text style={styles.charCounter}>{fullName.length}/50</Text>
+            </View>
+          </View>
+        );
+
+      case 2:
+        return (
+          <View style={styles.stepContainer}>
+            <Text style={styles.eyebrowText}>Account Details</Text>
+            <Text style={styles.headlineText}>What's your email?</Text>
+            <Text style={styles.subheadText}>
+              We'll send your instant transfer receipts and virtual card notices here.
+            </Text>
+
+            <View style={styles.heroInputWrapper}>
+              <TextInput
+                ref={inputRef}
+                style={styles.heroInput}
                 placeholder="name@creaspay.com"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor="#3A3A3C"
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -345,48 +307,134 @@ export const AuthScreen: React.FC = () => {
               />
             </View>
           </View>
+        );
 
-          {/* Password */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Password</Text>
-            <View style={styles.inputBox}>
-              <Ionicons name="lock-closed-outline" size={18} color={Colors.textOnSheetMuted} style={styles.inputIcon} />
+      case 3:
+        return (
+          <View style={styles.stepContainer}>
+            <Text style={styles.eyebrowText}>Contact Information</Text>
+            <Text style={styles.headlineText}>Your phone number</Text>
+            <Text style={styles.subheadText}>
+              Used for transaction notifications and dedicated Providus Bank linkage.
+            </Text>
+
+            <View style={styles.heroInputWrapper}>
               <TextInput
-                style={styles.textInput}
-                placeholder="••••••••••••"
-                placeholderTextColor="#9CA3AF"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
+                ref={inputRef}
+                style={styles.heroInput}
+                placeholder="+234 801 234 5678"
+                placeholderTextColor="#3A3A3C"
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                keyboardType="phone-pad"
                 autoCapitalize="none"
               />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeBtn}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons
-                  name={showPassword ? "eye-off-outline" : "eye-outline"}
-                  size={19}
-                  color={Colors.textOnSheetMuted}
-                />
-              </TouchableOpacity>
             </View>
           </View>
+        );
 
-          {/* Transaction PIN (Register Only) */}
-          {mode === "register" && (
-            <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
-                <Text style={styles.inputLabel}>4-Digit Transaction PIN</Text>
-                <Text style={styles.pinHelper}>For transfers & cards</Text>
+      case 4:
+        return (
+          <View style={styles.stepContainer}>
+            <Text style={styles.eyebrowText}>Instant Banking Rails</Text>
+            <Text style={styles.headlineText}>Enter your 11-digit BVN</Text>
+            <Text style={styles.subheadText}>
+              Instantly provisions your dedicated Providus Bank virtual account (or leave blank to verify later).
+            </Text>
+
+            <View style={styles.heroInputWrapper}>
+              <TextInput
+                ref={inputRef}
+                style={styles.heroInput}
+                placeholder="e.g. 22234567890"
+                placeholderTextColor="#3A3A3C"
+                value={bvn}
+                onChangeText={(val) => {
+                  setBvn(val);
+                  if (val.length === 11 && !dateOfBirth) {
+                    setDobModalInput("");
+                    setDobModalError(null);
+                    setDobModalVisible(true);
+                  }
+                }}
+                keyboardType="number-pad"
+                maxLength={11}
+              />
+              <Text style={styles.charCounter}>{bvn.length}/11</Text>
+            </View>
+
+            {/* Date of Birth field shown directly if BVN is filled */}
+            {bvn.length > 0 && (
+              <View style={styles.dobContainer}>
+                <View style={styles.dobLabelRow}>
+                  <Text style={styles.dobLabel}>Date of Birth (YYYY-MM-DD)</Text>
+                  <Text style={styles.dobBadge}>Required for BVN</Text>
+                </View>
+                <View style={styles.dobInputBox}>
+                  <Ionicons name="calendar-outline" size={18} color={Colors.primary} style={{ marginRight: 10 }} />
+                  <TextInput
+                    style={styles.dobTextInput}
+                    placeholder="1995-05-12"
+                    placeholderTextColor="#48484A"
+                    value={dateOfBirth}
+                    onChangeText={(val) => setDateOfBirth(formatDobInput(val))}
+                    keyboardType="number-pad"
+                    maxLength={10}
+                  />
+                </View>
+                <Text style={styles.dobHelper}>
+                  Bitnob requires your birth date matching bank records to issue your Providus account.
+                </Text>
               </View>
-              <View style={styles.inputBox}>
-                <Ionicons name="keypad-outline" size={18} color={Colors.textOnSheetMuted} style={styles.inputIcon} />
+            )}
+          </View>
+        );
+
+      case 5:
+        return (
+          <View style={styles.stepContainer}>
+            <Text style={styles.eyebrowText}>Security & Protection</Text>
+            <Text style={styles.headlineText}>Secure your CreasPay</Text>
+            <Text style={styles.subheadText}>
+              Set a strong account password and a 4-digit PIN for instant transfers and card issuance.
+            </Text>
+
+            <View style={styles.securityGroup}>
+              <Text style={styles.inputMiniLabel}>LOGIN PASSWORD (MIN 6 CHARS)</Text>
+              <View style={styles.securityInputBox}>
                 <TextInput
-                  style={styles.textInput}
-                  placeholder="e.g. 1234"
-                  placeholderTextColor="#9CA3AF"
+                  ref={inputRef}
+                  style={styles.securityTextInput}
+                  placeholder="••••••••••••"
+                  placeholderTextColor="#48484A"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                    size={19}
+                    color="#8E8E93"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={[styles.securityGroup, { marginTop: 18 }]}>
+              <View style={styles.dobLabelRow}>
+                <Text style={styles.inputMiniLabel}>4-DIGIT TRANSACTION PIN</Text>
+                <Text style={styles.pinHelperBadge}>For transfers & cards</Text>
+              </View>
+              <View style={styles.securityInputBox}>
+                <TextInput
+                  style={[styles.securityTextInput, { letterSpacing: 8, fontWeight: "800" }]}
+                  placeholder="••••"
+                  placeholderTextColor="#48484A"
                   value={passcode}
                   onChangeText={setPasscode}
                   keyboardType="number-pad"
@@ -395,53 +443,192 @@ export const AuthScreen: React.FC = () => {
                 />
               </View>
             </View>
+          </View>
+        );
+    }
+  };
+
+  // Render Login Form
+  const renderLoginContent = () => {
+    return (
+      <View style={styles.stepContainer}>
+        <View style={styles.loginBrandRow}>
+          <CreasPayLogo size={42} showText textSize={22} textColor="#FFFFFF" />
+        </View>
+
+        <Text style={styles.eyebrowText}>Welcome Back</Text>
+        <Text style={styles.headlineText}>Sign in to CreasPay</Text>
+        <Text style={styles.subheadText}>
+          Access your dedicated Providus Bank account, USD virtual cards, and instant rails.
+        </Text>
+
+        <View style={styles.securityGroup}>
+          <Text style={styles.inputMiniLabel}>EMAIL ADDRESS</Text>
+          <View style={styles.securityInputBox}>
+            <TextInput
+              ref={inputRef}
+              style={styles.securityTextInput}
+              placeholder="name@creaspay.com"
+              placeholderTextColor="#48484A"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+        </View>
+
+        <View style={[styles.securityGroup, { marginTop: 16 }]}>
+          <Text style={styles.inputMiniLabel}>PASSWORD</Text>
+          <View style={styles.securityInputBox}>
+            <TextInput
+              style={styles.securityTextInput}
+              placeholder="••••••••••••"
+              placeholderTextColor="#48484A"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity
+              onPress={() => setShowPassword(!showPassword)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons
+                name={showPassword ? "eye-off-outline" : "eye-outline"}
+                size={19}
+                color="#8E8E93"
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {canUseBiometrics && (
+          <TouchableOpacity
+            style={styles.biometricBtn}
+            onPress={loginWithBiometrics}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="finger-print" size={20} color="#10B981" />
+            <Text style={styles.biometricBtnText}>Sign In with Face ID / Biometrics</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
+  const valid = isStepValid();
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      {/* Top Ambient Glow Matching ss.mp4 */}
+      <LinearGradient
+        colors={["rgba(255, 30, 117, 0.25)", "rgba(255, 51, 102, 0.08)", "transparent"]}
+        style={styles.ambientGlow}
+        pointerEvents="none"
+      />
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.contentWrap}>
+          {/* Top Bar with Step Indicators */}
+          <View style={styles.topBar}>
+            {mode === "register" ? (
+              <View style={styles.progressRow}>
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <View
+                    key={s}
+                    style={[
+                      styles.progressDash,
+                      s <= step ? styles.progressDashActive : styles.progressDashInactive,
+                    ]}
+                  />
+                ))}
+              </View>
+            ) : (
+              <View style={styles.loginPill}>
+                <Text style={styles.loginPillText}>SECURE LOGIN</Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              onPress={() => {
+                setErrorMessage(null);
+                setMode(mode === "login" ? "register" : "login");
+                if (mode === "login") setStep(1);
+              }}
+              style={styles.modeSwitchBtn}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modeSwitchText}>
+                {mode === "login" ? "Create Account" : "Sign In"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Error Banner */}
+          {errorMessage && (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle" size={16} color="#EF4444" />
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
           )}
 
-          {/* ACTION SUBMIT BUTTON */}
+          {/* Active Flow Content */}
+          {mode === "register" ? renderRegisterContent() : renderLoginContent()}
+        </View>
+
+        {/* Bottom Docked Action Bar Matching ss.mp4 */}
+        <View style={styles.bottomActionBar}>
+          {mode === "register" && step > 1 && (
+            <TouchableOpacity
+              style={styles.goBackBtn}
+              onPress={handlePrevStep}
+              activeOpacity={0.7}
+              disabled={loading}
+            >
+              <Text style={styles.goBackBtnText}>Go Back</Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
-            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-            onPress={mode === "login" ? handleLogin : () => handleRegister()}
-            disabled={loading}
+            style={[
+              styles.primaryBtn,
+              mode === "register" && step === 1 && { flex: 1 },
+              mode === "login" && { flex: 1 },
+              valid || mode === "login" || (step === 4 && bvn.length === 0)
+                ? styles.primaryBtnActive
+                : styles.primaryBtnDisabled,
+            ]}
+            onPress={mode === "login" ? handleLogin : handleNextStep}
+            disabled={loading || (mode === "register" && !valid && !(step === 4 && bvn.length === 0))}
             activeOpacity={0.85}
           >
             {loading ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
-              <Text style={styles.submitButtonText}>
-                {mode === "login" ? "Sign In to CreasPay" : "Create Account"}
+              <Text style={styles.primaryBtnText}>
+                {mode === "login"
+                  ? "Sign In"
+                  : step === 5
+                  ? "Create Account"
+                  : step === 4 && bvn.length === 0
+                  ? "Skip for Now"
+                  : "Continue"}
               </Text>
             )}
           </TouchableOpacity>
-
-          {/* Real Biometric Login Button */}
-          {canUseBiometrics && mode === "login" && (
-            <TouchableOpacity
-              style={styles.biometricBtn}
-              onPress={loginWithBiometrics}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="finger-print" size={22} color={Colors.primary} />
-              <Text style={styles.biometricBtnText}>Sign In with Face ID / Biometrics</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Switch Prompt */}
-          <View style={styles.switchRow}>
-            <Text style={styles.switchPromptText}>
-              {mode === "login" ? "Don't have an account yet?" : "Already have a CreasPay account?"}
-            </Text>
-            <TouchableOpacity
-              onPress={() => handleSwitchMode(mode === "login" ? "register" : "login")}
-            >
-              <Text style={styles.switchLinkText}>
-                {mode === "login" ? " Create one" : " Sign In"}
-              </Text>
-            </TouchableOpacity>
-          </View>
         </View>
       </ScrollView>
 
-      {/* BITNOB BVN DATE OF BIRTH MODAL ALERT */}
+      {/* Bitnob BVN Date of Birth Modal Alert */}
       <Modal
         visible={dobModalVisible}
         transparent
@@ -452,59 +639,57 @@ export const AuthScreen: React.FC = () => {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
         >
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalCard}>
-              <View style={styles.modalIconBox}>
-                <Ionicons name="calendar" size={26} color={Colors.primary} />
-              </View>
-
-              <Text style={styles.modalTitle}>Date of Birth Required</Text>
-              <Text style={styles.modalDescription}>
-                To immediately create your Providus Bank account with your BVN, Bitnob requires your Date of Birth exactly as registered with your bank.
-              </Text>
-
-              {dobModalError ? (
-                <View style={styles.modalErrorBanner}>
-                  <Ionicons name="alert-circle" size={16} color="#EF4444" />
-                  <Text style={styles.modalErrorText}>{dobModalError}</Text>
-                </View>
-              ) : null}
-
-              <View style={styles.modalInputGroup}>
-                <Text style={styles.modalInputLabel}>DATE OF BIRTH (YYYY-MM-DD)</Text>
-                <View style={styles.modalInputBox}>
-                  <Ionicons name="calendar-outline" size={18} color={Colors.primary} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.modalTextInput}
-                    placeholder="YYYY-MM-DD (e.g. 1995-05-12)"
-                    placeholderTextColor="#9CA3AF"
-                    value={dobModalInput}
-                    onChangeText={(t) => setDobModalInput(formatDobInput(t))}
-                    keyboardType="number-pad"
-                    maxLength={10}
-                    autoFocus
-                  />
-                </View>
-                <Text style={styles.modalHint}>Enter Year-Month-Day (e.g. 1995-05-12)</Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.modalPrimaryBtn}
-                onPress={handleConfirmDobModal}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.modalPrimaryBtnText}>Confirm & Create Bank Account</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.modalSecondaryBtn}
-                onPress={handleSkipBvnModal}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.modalSecondaryBtnText}>Skip BVN & Verify Later</Text>
-              </TouchableOpacity>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconBox}>
+              <Ionicons name="calendar" size={26} color={Colors.primary} />
             </View>
+
+            <Text style={styles.modalTitle}>Date of Birth Required</Text>
+            <Text style={styles.modalDescription}>
+              To immediately generate your dedicated Providus Bank account with your BVN, Bitnob requires your Date of Birth as registered with your bank.
+            </Text>
+
+            {dobModalError ? (
+              <View style={styles.modalErrorBanner}>
+                <Ionicons name="alert-circle" size={16} color="#EF4444" />
+                <Text style={styles.modalErrorText}>{dobModalError}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.modalInputGroup}>
+              <Text style={styles.modalInputLabel}>DATE OF BIRTH (YYYY-MM-DD)</Text>
+              <View style={styles.modalInputBox}>
+                <Ionicons name="calendar-outline" size={18} color={Colors.primary} style={{ marginRight: 10 }} />
+                <TextInput
+                  style={styles.modalTextInput}
+                  placeholder="YYYY-MM-DD (e.g. 1995-05-12)"
+                  placeholderTextColor="#6B7280"
+                  value={dobModalInput}
+                  onChangeText={(t) => setDobModalInput(formatDobInput(t))}
+                  keyboardType="number-pad"
+                  maxLength={10}
+                  autoFocus
+                />
+              </View>
+              <Text style={styles.modalHint}>Format: Year-Month-Day (e.g. 1995-05-12)</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalPrimaryBtn}
+              onPress={handleConfirmDobModal}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.modalPrimaryBtnText}>Confirm & Create Bank Account</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalSecondaryBtn}
+              onPress={handleSkipBvnModal}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalSecondaryBtnText}>Skip BVN & Verify Later</Text>
+            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -513,266 +698,306 @@ export const AuthScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  keyboardContainer: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: "#000000",
+  },
+  ambientGlow: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 320,
   },
   scrollContent: {
     flexGrow: 1,
-  },
-  darkHeader: {
+    justifyContent: "space-between",
     paddingHorizontal: 24,
-    paddingTop: 36,
-    paddingBottom: 24,
-    backgroundColor: Colors.background,
+    paddingTop: Platform.OS === "ios" ? 14 : 20,
+    paddingBottom: Platform.OS === "ios" ? 28 : 20,
   },
-  brandBadge: {
+  contentWrap: {
+    flex: 1,
+  },
+  topBar: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 24,
+    justifyContent: "space-between",
+    marginBottom: 28,
   },
-  brandIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: "rgba(255, 30, 117, 0.15)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 30, 117, 0.3)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 14,
-  },
-  brandTitle: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: "#FFFFFF",
-    letterSpacing: 1.5,
-  },
-  brandSubtitle: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: Colors.textMuted,
-    letterSpacing: 0.8,
-    marginTop: 2,
-  },
-  tabContainer: {
+  progressRow: {
     flexDirection: "row",
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: 16,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 11,
     alignItems: "center",
-    borderRadius: 12,
+    gap: 6,
   },
-  tabButtonActive: {
-    backgroundColor: Colors.primary,
-  },
-  tabText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: Colors.textMuted,
-  },
-  tabTextActive: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-  },
-  whiteSheet: {
-    flex: 1,
-    backgroundColor: Colors.sheetBackground,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    paddingTop: 14,
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    minHeight: 520,
-  },
-  sheetHandle: {
-    width: 36,
+  progressDash: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#E5E7EB",
-    alignSelf: "center",
-    marginBottom: 16,
   },
-  sheetHeading: {
-    fontSize: 22,
+  progressDashActive: {
+    width: 22,
+    backgroundColor: Colors.primary,
+  },
+  progressDashInactive: {
+    width: 6,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+  },
+  loginPill: {
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  loginPillText: {
+    fontSize: 10,
     fontWeight: "800",
-    color: Colors.textOnSheet,
-    letterSpacing: -0.4,
-    marginBottom: 4,
+    color: "#9CA3AF",
+    letterSpacing: 1,
   },
-  sheetSubheading: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: Colors.textOnSheetMuted,
-    marginBottom: 20,
-    lineHeight: 18,
+  modeSwitchBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+  },
+  modeSwitchText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FEE2E2",
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    marginBottom: 16,
+    backgroundColor: "rgba(239, 68, 68, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(239, 68, 68, 0.35)",
+    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    marginBottom: 20,
     gap: 8,
   },
   errorText: {
     flex: 1,
     fontSize: 12,
     fontWeight: "600",
-    color: "#B91C1C",
+    color: "#FCA5A5",
   },
-  inputGroup: {
-    marginBottom: 15,
+  stepContainer: {
+    flex: 1,
   },
-  labelRow: {
+  loginBrandRow: {
+    marginBottom: 16,
+  },
+  eyebrowText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#8E8E93",
+    marginBottom: 8,
+    letterSpacing: 0.3,
+  },
+  headlineText: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: -0.6,
+    lineHeight: 34,
+    marginBottom: 10,
+  },
+  subheadText: {
+    fontSize: 14,
+    color: "#8E8E93",
+    lineHeight: 20,
+    marginBottom: 32,
+  },
+  heroInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1.5,
+    borderBottomColor: "rgba(255, 255, 255, 0.16)",
+    paddingBottom: 10,
+  },
+  heroInput: {
+    flex: 1,
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    paddingVertical: 4,
+  },
+  charCounter: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#636366",
+    marginLeft: 12,
+  },
+  dobContainer: {
+    marginTop: 26,
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  dobLabelRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: 10,
   },
-  inputLabel: {
-    fontSize: 13,
+  dobLabel: {
+    fontSize: 12,
     fontWeight: "700",
-    color: Colors.textOnSheet,
-    marginBottom: 6,
-  },
-  optionalBadge: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: Colors.textOnSheetMuted,
+    color: "#FFFFFF",
   },
   dobBadge: {
-    fontSize: 11,
-    fontWeight: "700",
+    fontSize: 10,
+    fontWeight: "800",
     color: Colors.primary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  fieldHelper: {
-    fontSize: 11,
-    color: Colors.textOnSheetMuted,
-    marginTop: 4,
-  },
-  pinHelper: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: Colors.primary,
-  },
-  inputBox: {
+  dobInputBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F3F4F6",
-    borderRadius: 14,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    borderRadius: 12,
     paddingHorizontal: 12,
     height: 48,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "rgba(255, 30, 117, 0.4)",
   },
-  inputIcon: {
-    marginRight: 8,
-  },
-  textInput: {
+  dobTextInput: {
     flex: 1,
-    fontSize: 14,
-    color: Colors.textOnSheet,
-    fontWeight: "500",
-    height: "100%",
-  },
-  eyeBtn: {
-    padding: 4,
-  },
-  submitButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 16,
-    height: 50,
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 10,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  submitButtonDisabled: {
-    opacity: 0.65,
-  },
-  submitButtonText: {
-    fontSize: 15,
-    fontWeight: "800",
+    fontSize: 16,
+    fontWeight: "600",
     color: "#FFFFFF",
+    letterSpacing: 1,
   },
-  switchRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 18,
+  dobHelper: {
+    fontSize: 11,
+    color: "#8E8E93",
+    marginTop: 8,
+    lineHeight: 15,
   },
-  switchPromptText: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: Colors.textOnSheetMuted,
+  securityGroup: {
+    width: "100%",
   },
-  switchLinkText: {
-    fontSize: 13,
+  inputMiniLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#8E8E93",
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  pinHelperBadge: {
+    fontSize: 10,
     fontWeight: "700",
     color: Colors.primary,
+  },
+  securityInputBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.06)",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 54,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.12)",
+  },
+  securityTextInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFFFFF",
+    height: "100%",
   },
   biometricBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(16, 185, 129, 0.08)",
+    backgroundColor: "rgba(16, 185, 129, 0.1)",
     borderWidth: 1,
-    borderColor: "rgba(16, 185, 129, 0.25)",
-    paddingVertical: 12,
-    paddingHorizontal: 18,
+    borderColor: "rgba(16, 185, 129, 0.3)",
+    paddingVertical: 14,
     borderRadius: 16,
-    marginTop: 12,
+    marginTop: 20,
     gap: 8,
   },
   biometricBtnText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
-    color: "#059669",
+    color: "#10B981",
   },
-  // Date of Birth Modal Styles
-  modalOverlay: {
+  bottomActionBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 24,
+  },
+  goBackBtn: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.75)",
+    backgroundColor: "#1C1C1E",
+    borderRadius: 16,
+    height: 52,
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
   },
-  modalBackdrop: {
-    width: "100%",
-    maxWidth: 420,
+  goBackBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  primaryBtn: {
+    flex: 1.5,
+    borderRadius: 16,
+    height: 52,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  primaryBtnActive: {
+    backgroundColor: Colors.primary,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  primaryBtnDisabled: {
+    backgroundColor: "#1C1C1E",
+  },
+  primaryBtnText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.82)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
   },
   modalCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#111116",
     borderRadius: 24,
     padding: 24,
+    width: "100%",
+    maxWidth: 400,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.12)",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 12,
   },
   modalIconBox: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "rgba(255, 30, 117, 0.12)",
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: "rgba(255, 30, 117, 0.15)",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 16,
@@ -780,21 +1005,21 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: Colors.textOnSheet,
+    color: "#FFFFFF",
     marginBottom: 8,
     textAlign: "center",
   },
   modalDescription: {
     fontSize: 13,
-    color: Colors.textOnSheetMuted,
+    color: "#8E8E93",
     textAlign: "center",
-    lineHeight: 19,
+    lineHeight: 18,
     marginBottom: 18,
   },
   modalErrorBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "rgba(239, 68, 68, 0.15)",
     borderRadius: 12,
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -806,7 +1031,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontWeight: "600",
-    color: "#B91C1C",
+    color: "#FCA5A5",
   },
   modalInputGroup: {
     width: "100%",
@@ -815,14 +1040,14 @@ const styles = StyleSheet.create({
   modalInputLabel: {
     fontSize: 11,
     fontWeight: "800",
-    color: Colors.textOnSheetMuted,
+    color: "#8E8E93",
     letterSpacing: 0.5,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   modalInputBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "rgba(255, 255, 255, 0.06)",
     borderRadius: 14,
     paddingHorizontal: 14,
     height: 50,
@@ -831,15 +1056,15 @@ const styles = StyleSheet.create({
   },
   modalTextInput: {
     flex: 1,
-    fontSize: 15,
-    color: Colors.textOnSheet,
+    fontSize: 16,
+    color: "#FFFFFF",
     fontWeight: "600",
     letterSpacing: 1,
   },
   modalHint: {
     fontSize: 11,
-    color: Colors.textOnSheetMuted,
-    marginTop: 5,
+    color: "#8E8E93",
+    marginTop: 6,
     marginLeft: 2,
   },
   modalPrimaryBtn: {
@@ -853,9 +1078,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.35,
     shadowRadius: 8,
-    elevation: 3,
   },
   modalPrimaryBtnText: {
     fontSize: 15,
@@ -871,6 +1095,6 @@ const styles = StyleSheet.create({
   modalSecondaryBtnText: {
     fontSize: 13,
     fontWeight: "700",
-    color: Colors.textOnSheetMuted,
+    color: "#8E8E93",
   },
 });
