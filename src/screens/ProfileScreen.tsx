@@ -236,7 +236,7 @@ export const ProfileScreen: React.FC = () => {
                   maxLength={11}
                 />
               </View>
-              <Text style={styles.kycFieldHint}>Verified securely with Bitnob rails.</Text>
+              <Text style={styles.kycFieldHint}>Verified securely with CreasPay banking rails.</Text>
             </View>
 
             {/* Date of Birth Input */}
@@ -405,7 +405,7 @@ export const ProfileScreen: React.FC = () => {
         <View style={styles.brandFooter}>
           <CreasPayLogo size={20} showText textSize={14} textColor={Colors.textOnSheetMuted} />
           <Text style={styles.brandFooterText}>
-            CreasPay v1.0.0 • Verified Bitnob USD Issuance
+            CreasPay v1.0.0 • Verified Virtual USD Issuance
           </Text>
         </View>
       </View>

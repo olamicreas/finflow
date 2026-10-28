@@ -98,7 +98,7 @@ export const AddMoneyModal: React.FC<Props> = ({ visible, onClose, onNavigateToP
                 <View style={styles.accountCardHeader}>
                   <View style={styles.livePill}>
                     <View style={styles.liveDot} />
-                    <Text style={styles.livePillText}>BITNOB INSTANT RAILS</Text>
+                    <Text style={styles.livePillText}>CREASPAY INSTANT RAILS</Text>
                   </View>
                   <Text style={styles.zeroFeeBadge}>0% Fee</Text>
                 </View>

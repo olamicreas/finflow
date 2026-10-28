@@ -44,9 +44,11 @@ export const AuthScreen: React.FC = () => {
   const [dobModalError, setDobModalError] = useState<string | null>(null);
 
   const inputRef = useRef<TextInput>(null);
+  const hasPromptedBiometricsRef = useRef<boolean>(false);
 
   useEffect(() => {
-    if (canUseBiometrics && mode === "login") {
+    if (canUseBiometrics && mode === "login" && !hasPromptedBiometricsRef.current) {
+      hasPromptedBiometricsRef.current = true;
       const timer = setTimeout(() => {
         loginWithBiometrics();
       }, 500);
@@ -383,7 +385,7 @@ export const AuthScreen: React.FC = () => {
                   />
                 </View>
                 <Text style={styles.dobHelper}>
-                  Bitnob requires your birth date matching bank records to issue your Providus account.
+                  Banking regulations require your birth date matching bank records to issue your Providus account.
                 </Text>
               </View>
             )}
@@ -642,7 +644,7 @@ export const AuthScreen: React.FC = () => {
 
             <Text style={styles.modalTitle}>Date of Birth Required</Text>
             <Text style={styles.modalDescription}>
-              To immediately generate your dedicated Providus Bank account with your BVN, Bitnob requires your Date of Birth as registered with your bank.
+              To immediately generate your dedicated Providus Bank account with your BVN, please provide your Date of Birth as registered with your bank.
             </Text>
 
             {dobModalError ? (

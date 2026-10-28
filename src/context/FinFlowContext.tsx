@@ -124,6 +124,7 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isBiometricEnabled, setIsBiometricEnabled] = useState<boolean>(true);
   const [isAppLocked, setIsAppLocked] = useState<boolean>(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const wasInBackgroundRef = useRef<boolean>(false);
   const isPromptingBioRef = useRef<boolean>(false);
 
   // Add Money Modal state
@@ -165,10 +166,17 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
     initSessionAndBiometrics();
   }, []);
 
-  // 2. Lock app whenever user leaves and returns
+  // 2. Lock app ONLY when user leaves/minimizes the app (background) and prompt once upon return
   useEffect(() => {
     const handleAppStateChange = async (nextAppState: AppStateStatus) => {
-      if (appStateRef.current.match(/inactive|background/) && nextAppState === "active") {
+      if (nextAppState === "background") {
+        wasInBackgroundRef.current = true;
+        const savedToken = await AsyncStorage.getItem(STORAGE_TOKEN_KEY);
+        if (savedToken && isBiometricEnabled) {
+          setIsAppLocked(true);
+        }
+      } else if (nextAppState === "active" && wasInBackgroundRef.current) {
+        wasInBackgroundRef.current = false;
         const savedToken = await AsyncStorage.getItem(STORAGE_TOKEN_KEY);
         const bioSetting = await AsyncStorage.getItem(STORAGE_BIOMETRIC_KEY);
         const bioActive = bioSetting !== "false";
@@ -177,12 +185,7 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setIsAppLocked(true);
           setTimeout(() => {
             unlockWithBiometrics();
-          }, 250);
-        }
-      } else if (nextAppState.match(/inactive|background/)) {
-        const savedToken = await AsyncStorage.getItem(STORAGE_TOKEN_KEY);
-        if (savedToken && isBiometricEnabled) {
-          setIsAppLocked(true);
+          }, 200);
         }
       }
       appStateRef.current = nextAppState;
