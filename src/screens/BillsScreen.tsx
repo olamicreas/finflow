@@ -26,6 +26,21 @@ import {
 type BillCatType = "airtime" | "data" | "electricity" | "cable";
 type DataPlanFilter = "all" | "daily" | "weekly" | "monthly" | "night" | "router";
 
+const formatUserPhoneForInput = (raw?: string): string => {
+  if (!raw) return "";
+  const cleaned = raw.replace(/[^0-9+]/g, "");
+  if (cleaned.startsWith("+234")) {
+    return "0" + cleaned.slice(4);
+  }
+  if (cleaned.startsWith("234") && cleaned.length >= 13) {
+    return "0" + cleaned.slice(3);
+  }
+  if (cleaned.length === 10 && !cleaned.startsWith("0")) {
+    return "0" + cleaned;
+  }
+  return cleaned;
+};
+
 const DATA_NETWORKS = [
   { id: "MTN", name: "MTN" },
   { id: "Airtel", name: "Airtel" },
@@ -56,22 +71,39 @@ export const BillsScreen: React.FC<Props> = ({
   navigation,
   initialCategory = "airtime",
 }) => {
-  const { ngnWallet, refreshData, showToast } = useFinFlow();
+  const { ngnWallet, refreshData, showToast, user } = useFinFlow();
 
   const [activeCategory, setActiveCategory] = useState<BillCatType>(initialCategory);
   const [billers, setBillers] = useState<any[]>([]);
   const [selectedBiller, setSelectedBiller] = useState<any>(null);
   const [isLoadingBillers, setIsLoadingBillers] = useState(false);
 
+  // Derive initial user phone and network detection
+  const initialPhone = formatUserPhoneForInput(user?.phone_number);
+  const initialDetected = initialPhone ? detectNigerianNetwork(initialPhone) : null;
+
   // Data Plans Filter & Network State
-  const [selectedNetwork, setSelectedNetwork] = useState<string>("Airtel");
+  const [selectedNetwork, setSelectedNetwork] = useState<string>(initialDetected || "Airtel");
   const [selectedPlanType, setSelectedPlanType] = useState<DataPlanFilter>("all");
 
   // Form Inputs
-  const [customer, setCustomer] = useState("08023456789");
-  const [detectedNetwork, setDetectedNetwork] = useState<NigerianNetwork | null>("Airtel");
+  const [customer, setCustomer] = useState(initialPhone);
+  const [detectedNetwork, setDetectedNetwork] = useState<NigerianNetwork | null>(initialDetected);
   const [amount, setAmount] = useState("1000");
   const [meterType, setMeterType] = useState<"prepaid" | "postpaid">("prepaid");
+
+  // Pre-fill registered phone number if profile loads asynchronously
+  useEffect(() => {
+    if (user?.phone_number && !customer) {
+      const formatted = formatUserPhoneForInput(user.phone_number);
+      setCustomer(formatted);
+      const detected = detectNigerianNetwork(formatted);
+      setDetectedNetwork(detected);
+      if (detected) {
+        setSelectedNetwork(detected);
+      }
+    }
+  }, [user?.phone_number]);
 
   // Handler for customer phone / meter input with real-time network detection
   const handleCustomerChange = (txt: string) => {
