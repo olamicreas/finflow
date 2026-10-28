@@ -9,6 +9,9 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
@@ -310,11 +313,18 @@ export const BillsScreen: React.FC<Props> = ({
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: Colors.background }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
     >
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 160 }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
       {/* JET BLACK TOP HEADER */}
       <View style={styles.darkHeader}>
         <View style={styles.topNavRow}>
@@ -868,18 +878,39 @@ export const BillsScreen: React.FC<Props> = ({
         onCancel={() => setPasscodeModalVisible(false)}
       />
 
-      {/* Success Receipt Modal */}
+      {/* Success / Processing Receipt Modal */}
       <Modal visible={receiptVisible} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.receiptSheet}>
-            <View style={styles.successIconCircle}>
-              <Ionicons name="checkmark" size={32} color="#FFFFFF" />
+            <View
+              style={[
+                styles.successIconCircle,
+                receiptData?.status === "processing" && {
+                  backgroundColor: "#3B82F6",
+                },
+              ]}
+            >
+              <Ionicons
+                name={
+                  receiptData?.status === "processing"
+                    ? "time-outline"
+                    : "checkmark"
+                }
+                size={32}
+                color="#FFFFFF"
+              />
             </View>
 
-            <Text style={styles.receiptTitle}>Payment Successful</Text>
+            <Text style={styles.receiptTitle}>
+              {receiptData?.status === "processing"
+                ? "Order Processing"
+                : "Payment Successful"}
+            </Text>
             <Text style={styles.receiptSub}>
-              {formatNGN(receiptData?.amount || 0)} paid to{" "}
-              {receiptData?.biller_name}
+              {receiptData?.message ||
+                `${formatNGN(receiptData?.amount || 0)} paid to ${
+                  receiptData?.biller_name
+                }`}
             </Text>
 
             {/* If Electricity: Prominently show 20-digit token */}
@@ -921,6 +952,26 @@ export const BillsScreen: React.FC<Props> = ({
               <Text style={styles.receiptRowVal}>{receiptData?.reference}</Text>
             </View>
 
+            <View style={styles.receiptRow}>
+              <Text style={styles.receiptRowLabel}>Status</Text>
+              <Text
+                style={[
+                  styles.receiptRowVal,
+                  {
+                    color:
+                      receiptData?.status === "processing"
+                        ? "#3B82F6"
+                        : "#10B981",
+                    fontWeight: "800",
+                  },
+                ]}
+              >
+                {receiptData?.status === "processing"
+                  ? "PROCESSING"
+                  : "SUCCESSFUL"}
+              </Text>
+            </View>
+
             <TouchableOpacity
               style={styles.doneBtn}
               onPress={() => setReceiptVisible(false)}
@@ -931,7 +982,8 @@ export const BillsScreen: React.FC<Props> = ({
           </View>
         </View>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 

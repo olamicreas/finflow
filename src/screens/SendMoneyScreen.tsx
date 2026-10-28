@@ -10,6 +10,9 @@ import {
   FlatList,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../theme/colors";
@@ -155,11 +158,18 @@ export const SendMoneyScreen: React.FC = () => {
   );
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: Colors.background }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
     >
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 160 }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
       {/* JET BLACK TOP HEADER & BALANCE HERO */}
       <View style={styles.darkHeader}>
         <View style={styles.topNavRow}>
@@ -370,14 +380,23 @@ export const SendMoneyScreen: React.FC = () => {
           )}
         </TouchableOpacity>
       </View>
+      </ScrollView>
 
       {/* Bank Selection Modal */}
       <Modal visible={bankModalVisible} animationType="slide" transparent>
-        <View style={styles.bankModalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.bankModalBackdrop}
+        >
           <View style={styles.bankModalSheet}>
             <View style={styles.bankModalHeader}>
               <Text style={styles.bankModalTitle}>Select Bank</Text>
-              <TouchableOpacity onPress={() => setBankModalVisible(false)}>
+              <TouchableOpacity
+                onPress={() => {
+                  setBankModalVisible(false);
+                  Keyboard.dismiss();
+                }}
+              >
                 <Ionicons
                   name="close"
                   size={24}
@@ -398,12 +417,17 @@ export const SendMoneyScreen: React.FC = () => {
                 placeholderTextColor={Colors.textOnSheetMuted}
                 value={searchBankQuery}
                 onChangeText={setSearchBankQuery}
+                autoCorrect={false}
+                clearButtonMode="while-editing"
+                returnKeyType="search"
               />
             </View>
 
             <FlatList
               data={filteredBanks}
               keyExtractor={(item) => item.code}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[
@@ -414,6 +438,7 @@ export const SendMoneyScreen: React.FC = () => {
                     setSelectedBank(item);
                     setBankModalVisible(false);
                     setSearchBankQuery("");
+                    Keyboard.dismiss();
                   }}
                 >
                   <Text style={styles.bankItemName}>{item.name}</Text>
@@ -428,7 +453,7 @@ export const SendMoneyScreen: React.FC = () => {
               )}
             />
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <PasscodeModal
@@ -440,7 +465,7 @@ export const SendMoneyScreen: React.FC = () => {
         onSuccess={handlePasscodeSuccess}
         onCancel={() => setPasscodeModalVisible(false)}
       />
-    </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -737,7 +762,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     padding: 22,
-    maxHeight: "80%",
+    height: Platform.OS === "ios" ? 540 : "80%",
+    maxHeight: "92%",
   },
   bankModalHeader: {
     flexDirection: "row",
