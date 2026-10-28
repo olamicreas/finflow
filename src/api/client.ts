@@ -74,6 +74,12 @@ export const api = {
 
   getMe: () => request<any>("/auth/me"),
 
+  registerPushToken: (push_token: string) =>
+    request<any>("/auth/push-token", {
+      method: "POST",
+      body: JSON.stringify({ push_token }),
+    }),
+
   submitKyc: (payload: any) =>
     request<any>("/auth/kyc", {
       method: "POST",

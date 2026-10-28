@@ -2,7 +2,9 @@ import React, { createContext, useContext, useEffect, useState, useRef } from "r
 import { AppState, AppStateStatus } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as LocalAuthentication from "expo-local-authentication";
+import * as Haptics from "expo-haptics";
 import { api, setAuthToken } from "../api/client";
+import { notificationService } from "../services/notificationService";
 
 const STORAGE_TOKEN_KEY = "@creaspay_auth_token";
 const STORAGE_USER_KEY = "@creaspay_user_profile";
@@ -126,6 +128,9 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const wasInBackgroundRef = useRef<boolean>(false);
   const isPromptingBioRef = useRef<boolean>(false);
+  const prevNgnBalanceRef = useRef<number | null>(null);
+  const prevTxCountRef = useRef<number | null>(null);
+  const isSyncingRef = useRef<boolean>(false);
 
   // Add Money Modal state
   const [addMoneyModalVisible, setAddMoneyModalVisible] = useState<boolean>(false);
@@ -200,30 +205,85 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const refreshData = async () => {
+  const syncDataSilently = async () => {
+    if (isSyncingRef.current) return;
     try {
+      isSyncingRef.current = true;
       const [walletsData, vaData, cardsData, txData] = await Promise.all([
-        api.getWallets().catch(() => []),
+        api.getWallets().catch(() => null),
         api.getVirtualAccount().catch(() => null),
-        api.getCards().catch(() => []),
-        api.getTransactions().catch(() => []),
+        api.getCards().catch(() => null),
+        api.getTransactions().catch(() => null),
       ]);
 
-      setWallets(walletsData);
-      setVirtualAccount(vaData);
-      setCards(cardsData);
-      setTransactions(txData);
+      if (walletsData && Array.isArray(walletsData)) {
+        setWallets(walletsData);
+        const ngn = walletsData.find((w: any) => w.currency === "NGN")?.balance ?? 0;
+        if (prevNgnBalanceRef.current !== null && ngn > prevNgnBalanceRef.current) {
+          const diff = ngn - prevNgnBalanceRef.current;
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          const formatted = diff.toLocaleString(undefined, { minimumFractionDigits: 2 });
+          showToast(`₦${formatted} Received • Balance Updated`);
+          notificationService.triggerLocalNotification(
+            "Money Received!",
+            `Your CreasPay account was credited with ₦${formatted}.`,
+            { type: "deposit", amount: diff }
+          );
+        }
+        prevNgnBalanceRef.current = ngn;
+      }
 
-      if (cardsData.length > 0) {
-        // Keep currently selected or pick the first
+      if (vaData) setVirtualAccount(vaData);
+      if (cardsData && Array.isArray(cardsData)) {
+        setCards(cardsData);
         setActiveCard((prev) => (prev ? cardsData.find((c: any) => c.id === prev.id) || cardsData[0] : cardsData[0]));
-      } else {
-        setActiveCard(null);
+      }
+
+      if (txData && Array.isArray(txData)) {
+        if (prevTxCountRef.current !== null && txData.length > prevTxCountRef.current) {
+          const latestTx = txData[0];
+          if (latestTx && (latestTx.category === "airtime" || latestTx.category === "data" || latestTx.category === "bill")) {
+            if (latestTx.status === "successful") {
+              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+              showToast(`${latestTx.narration || "Utility purchase"} Successful!`);
+              notificationService.triggerLocalNotification(
+                "Utility Delivered",
+                `${latestTx.narration || "Payment"} completed successfully.`,
+                { type: "bill" }
+              );
+            }
+          }
+        }
+        prevTxCountRef.current = txData.length;
+        setTransactions(txData);
       }
     } catch (err: any) {
-      console.warn("Error refreshing CreasPay data:", err.message);
+      console.warn("Silent sync error:", err.message);
+    } finally {
+      isSyncingRef.current = false;
     }
   };
+
+  const refreshData = async () => {
+    await syncDataSilently();
+  };
+
+  // 3. High-Frequency Real-Time Auto-Sync Engine (Every 5 seconds while active)
+  useEffect(() => {
+    if (!user || isAppLocked) return;
+
+    // Register push token with backend on launch
+    notificationService.registerForPushNotificationsAsync();
+
+    // Initial silent sync
+    syncDataSilently();
+
+    const interval = setInterval(() => {
+      syncDataSilently();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [user, isAppLocked]);
 
   const login = async (email: string, pass: string) => {
     setIsLoading(true);

@@ -35,7 +35,14 @@ const MainApp: React.FC = () => {
     toastMessage,
     addMoneyModalVisible,
     setAddMoneyModalVisible,
+    refreshData,
   } = useFinFlow();
+
+  useEffect(() => {
+    if (isAuthenticated && !isAppLocked) {
+      refreshData();
+    }
+  }, [activeTab]);
 
   if (!isAuthenticated) {
     return (
