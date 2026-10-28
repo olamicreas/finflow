@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useRef } from "react";
+import { AppState, AppStateStatus } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as LocalAuthentication from "expo-local-authentication";
 import { api, setAuthToken } from "../api/client";
@@ -97,6 +98,8 @@ interface FinFlowContextType {
   // Real Biometric Features
   canUseBiometrics: boolean;
   isBiometricEnabled: boolean;
+  isAppLocked: boolean;
+  unlockWithBiometrics: () => Promise<boolean>;
   loginWithBiometrics: () => Promise<boolean>;
   toggleBiometrics: (enabled: boolean) => Promise<void>;
   // Quick Add Money Modal State
@@ -116,16 +119,19 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Biometric state
+  // Biometric & Lock state
   const [canUseBiometrics, setCanUseBiometrics] = useState<boolean>(false);
   const [isBiometricEnabled, setIsBiometricEnabled] = useState<boolean>(true);
+  const [isAppLocked, setIsAppLocked] = useState<boolean>(false);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const isPromptingBioRef = useRef<boolean>(false);
 
   // Add Money Modal state
   const [addMoneyModalVisible, setAddMoneyModalVisible] = useState<boolean>(false);
 
-  // Initialize Biometrics & check for saved credentials on app launch
+  // 1. Initial Session Restore & Biometric Check on App Launch
   useEffect(() => {
-    const initBiometrics = async () => {
+    const initSessionAndBiometrics = async () => {
       try {
         const hasHw = await LocalAuthentication.hasHardwareAsync();
         const isEnrolled = await LocalAuthentication.isEnrolledAsync();
@@ -134,13 +140,57 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setIsBiometricEnabled(bioActive);
 
         const savedToken = await AsyncStorage.getItem(STORAGE_TOKEN_KEY);
-        setCanUseBiometrics(hasHw && isEnrolled && !!savedToken && bioActive);
+        const savedUserStr = await AsyncStorage.getItem(STORAGE_USER_KEY);
+
+        if (savedToken && savedUserStr) {
+          const parsedUser = JSON.parse(savedUserStr);
+          setAuthToken(savedToken);
+          setUser(parsedUser);
+
+          if (hasHw && isEnrolled && bioActive) {
+            setCanUseBiometrics(true);
+            setIsAppLocked(true);
+            setTimeout(() => {
+              unlockWithBiometrics();
+            }, 350);
+          } else {
+            setIsAppLocked(false);
+            refreshData();
+          }
+        }
       } catch (e) {
-        console.warn("Failed to check biometrics:", e);
+        console.warn("Session restore error:", e);
       }
     };
-    initBiometrics();
-  }, [user]);
+    initSessionAndBiometrics();
+  }, []);
+
+  // 2. Lock app whenever user leaves and returns
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+      if (appStateRef.current.match(/inactive|background/) && nextAppState === "active") {
+        const savedToken = await AsyncStorage.getItem(STORAGE_TOKEN_KEY);
+        const bioSetting = await AsyncStorage.getItem(STORAGE_BIOMETRIC_KEY);
+        const bioActive = bioSetting !== "false";
+
+        if (savedToken && isBiometricEnabled && bioActive) {
+          setIsAppLocked(true);
+          setTimeout(() => {
+            unlockWithBiometrics();
+          }, 250);
+        }
+      } else if (nextAppState.match(/inactive|background/)) {
+        const savedToken = await AsyncStorage.getItem(STORAGE_TOKEN_KEY);
+        if (savedToken && isBiometricEnabled) {
+          setIsAppLocked(true);
+        }
+      }
+      appStateRef.current = nextAppState;
+    };
+
+    const sub = AppState.addEventListener("change", handleAppStateChange);
+    return () => sub.remove();
+  }, [isBiometricEnabled]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -271,9 +321,42 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
     showToast(enabled ? "Biometric login enabled" : "Biometric login disabled");
   };
 
+  const unlockWithBiometrics = async (): Promise<boolean> => {
+    if (isPromptingBioRef.current) return false;
+    try {
+      isPromptingBioRef.current = true;
+      const hasHw = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!hasHw || !isEnrolled) {
+        setIsAppLocked(false);
+        return true;
+      }
+
+      const authRes = await LocalAuthentication.authenticateAsync({
+        promptMessage: "Unlock CreasPay",
+        fallbackLabel: "Use Password",
+        cancelLabel: "Cancel",
+        disableDeviceFallback: false,
+      });
+
+      if (authRes.success) {
+        setIsAppLocked(false);
+        refreshData();
+        return true;
+      }
+      return false;
+    } catch (err: any) {
+      console.warn("Biometric unlock error:", err.message);
+      return false;
+    } finally {
+      isPromptingBioRef.current = false;
+    }
+  };
+
   const logout = async () => {
     setAuthToken(null);
     setUser(null);
+    setIsAppLocked(false);
     setWallets([]);
     setCards([]);
     setActiveCard(null);
@@ -306,6 +389,8 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
         refreshData,
         canUseBiometrics,
         isBiometricEnabled,
+        isAppLocked,
+        unlockWithBiometrics,
         loginWithBiometrics,
         toggleBiometrics,
         addMoneyModalVisible,

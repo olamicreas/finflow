@@ -158,18 +158,11 @@ export const SendMoneyScreen: React.FC = () => {
   );
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: Colors.background }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
     >
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 160 }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-      >
       {/* JET BLACK TOP HEADER & BALANCE HERO */}
       <View style={styles.darkHeader}>
         <View style={styles.topNavRow}>
@@ -380,7 +373,6 @@ export const SendMoneyScreen: React.FC = () => {
           )}
         </TouchableOpacity>
       </View>
-      </ScrollView>
 
       {/* Bank Selection Modal */}
       <Modal visible={bankModalVisible} animationType="slide" transparent>
@@ -465,7 +457,7 @@ export const SendMoneyScreen: React.FC = () => {
         onSuccess={handlePasscodeSuccess}
         onCancel={() => setPasscodeModalVisible(false)}
       />
-    </KeyboardAvoidingView>
+    </ScrollView>
   );
 };
 

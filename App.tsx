@@ -18,6 +18,7 @@ import { ReceiveMoneyScreen } from "./src/screens/ReceiveMoneyScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { BillsScreen } from "./src/screens/BillsScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
+import { BiometricLockScreen } from "./src/screens/BiometricLockScreen";
 import { AddMoneyModal } from "./src/components/AddMoneyModal";
 
 type TabType = "Home" | "Cards" | "Bills" | "Send" | "Profile";
@@ -25,7 +26,16 @@ type TabType = "Home" | "Cards" | "Bills" | "Send" | "Profile";
 const MainApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>("Home");
   const [initialBillCat, setInitialBillCat] = useState<"airtime" | "data" | "electricity" | "cable">("airtime");
-  const { isAuthenticated, toastMessage, addMoneyModalVisible, setAddMoneyModalVisible } = useFinFlow();
+  const {
+    user,
+    isAuthenticated,
+    isAppLocked,
+    unlockWithBiometrics,
+    logout,
+    toastMessage,
+    addMoneyModalVisible,
+    setAddMoneyModalVisible,
+  } = useFinFlow();
 
   if (!isAuthenticated) {
     return (
@@ -38,6 +48,19 @@ const MainApp: React.FC = () => {
           </View>
         )}
         <AuthScreen />
+      </SafeAreaView>
+    );
+  }
+
+  if (isAppLocked) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+        <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+        <BiometricLockScreen
+          user={user}
+          onUnlock={unlockWithBiometrics}
+          onLogout={logout}
+        />
       </SafeAreaView>
     );
   }

@@ -23,7 +23,7 @@ type RegisterStep = 1 | 2 | 3 | 4 | 5;
 export const AuthScreen: React.FC = () => {
   const { login, register, canUseBiometrics, loginWithBiometrics } = useFinFlow();
 
-  const [mode, setMode] = useState<AuthMode>("register");
+  const [mode, setMode] = useState<AuthMode>("login");
   const [step, setStep] = useState<RegisterStep>(1);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -524,6 +524,7 @@ export const AuthScreen: React.FC = () => {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 28 : 0}
     >
       {/* Top Ambient Glow Matching ss.mp4 */}
       <LinearGradient
@@ -552,11 +553,7 @@ export const AuthScreen: React.FC = () => {
                   />
                 ))}
               </View>
-            ) : (
-              <View style={styles.loginPill}>
-                <Text style={styles.loginPillText}>SECURE LOGIN</Text>
-              </View>
-            )}
+            ) : null}
 
             <TouchableOpacity
               onPress={() => {
@@ -935,6 +932,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     marginTop: 24,
+    marginBottom: Platform.OS === "ios" ? 16 : 8,
   },
   goBackBtn: {
     flex: 1,

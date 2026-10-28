@@ -313,18 +313,14 @@ export const BillsScreen: React.FC<Props> = ({
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: Colors.background }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.scrollContent, { paddingBottom: 60 }]}
+      showsVerticalScrollIndicator={false}
+      automaticallyAdjustKeyboardInsets={true}
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="handled"
     >
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 160 }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-      >
       {/* JET BLACK TOP HEADER */}
       <View style={styles.darkHeader}>
         <View style={styles.topNavRow}>
@@ -982,8 +978,7 @@ export const BillsScreen: React.FC<Props> = ({
           </View>
         </View>
       </Modal>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </ScrollView>
   );
 };
 
