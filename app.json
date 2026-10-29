@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.olamicreas.finflow",
-      "buildNumber": "24",
+      "buildNumber": "25",
       "infoPlist": {
         "CFBundleDisplayName": "CreasPay",
         "NSFaceIDUsageDescription": "Use Face ID to securely log in to your CreasPay account.",

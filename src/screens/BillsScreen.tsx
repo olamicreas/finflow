@@ -12,9 +12,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
 import { Colors } from "../theme/colors";
 import { formatNGN } from "../utils/formatters";
 import { useFinFlow } from "../context/FinFlowContext";
@@ -94,6 +96,46 @@ export const BillsScreen: React.FC<Props> = ({
   const [detectedNetwork, setDetectedNetwork] = useState<NigerianNetwork | null>(initialDetected);
   const [amount, setAmount] = useState("1000");
   const [meterType, setMeterType] = useState<"prepaid" | "postpaid">("prepaid");
+
+  // Zero-Data & Zero-Airtime Offline Recharge State
+  const [offlineModalVisible, setOfflineModalVisible] = useState(false);
+  const [offlineService, setOfflineService] = useState<"data" | "airtime">("data");
+  const [offlineNetwork, setOfflineNetwork] = useState<string>(initialDetected || "MTN");
+  const [offlineBundle, setOfflineBundle] = useState<string>("2GB");
+  const [offlineAirtimeAmount, setOfflineAirtimeAmount] = useState<string>("1000");
+  const [offlinePin, setOfflinePin] = useState<string>("");
+
+  const handleLaunchOfflineSms = async () => {
+    if (!offlinePin || offlinePin.length < 4) {
+      Alert.alert("Enter PIN", "Please enter your 4-digit transaction passcode.");
+      return;
+    }
+    const shortcode = "38477"; // CreasPay toll-free reverse-billed inbound shortcode
+    let cmd = "";
+    if (offlineService === "data") {
+      cmd = `CPAY DATA ${offlineNetwork} ${offlineBundle} ${offlinePin}`;
+    } else {
+      cmd = `CPAY AIRTIME ${offlineNetwork} ${offlineAirtimeAmount} ${offlinePin}`;
+    }
+
+    const sep = Platform.OS === "ios" ? "&" : "?";
+    const url = `sms:${shortcode}${sep}body=${encodeURIComponent(cmd)}`;
+
+    try {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      const canOpen = await Linking.canOpenURL(url).catch(() => true);
+      if (canOpen) {
+        await Linking.openURL(url);
+        setOfflineModalVisible(false);
+        setOfflinePin("");
+        showToast("Opening SMS • Send with ₦0.00 airtime to activate");
+      } else {
+        Alert.alert("SMS Not Supported", `Please text: "${cmd}" to ${shortcode}`);
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Could not launch Messages app");
+    }
+  };
 
   // Pre-fill registered phone number if profile loads asynchronously
   useEffect(() => {
@@ -334,10 +376,14 @@ export const BillsScreen: React.FC<Props> = ({
 
           <Text style={styles.topNavTitle}>Pay Bills</Text>
 
-          <View style={styles.avatarBtn}>
-            <View style={styles.avatarInnerAccent} />
-            <Ionicons name="flash" size={16} color="#FFFFFF" />
-          </View>
+          <TouchableOpacity
+            style={styles.offlineBtn}
+            onPress={() => setOfflineModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="flash" size={13} color="#FFD700" />
+            <Text style={styles.offlineBtnText}>Offline</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Balance Hero */}
@@ -347,6 +393,24 @@ export const BillsScreen: React.FC<Props> = ({
             {formatNGN(ngnWallet?.balance || 0)}
           </Text>
         </View>
+
+        {/* Offline Zero-Data & Zero-Airtime Banner */}
+        <TouchableOpacity
+          style={styles.offlineBanner}
+          onPress={() => setOfflineModalVisible(true)}
+          activeOpacity={0.85}
+        >
+          <View style={styles.offlineBannerLeft}>
+            <View style={styles.offlineIconBox}>
+              <Ionicons name="flash" size={15} color="#FFD700" />
+            </View>
+            <View style={{ marginLeft: 10, flex: 1 }}>
+              <Text style={styles.offlineBannerTitle}>Zero-Data & Zero-Airtime Recharge ⚡</Text>
+              <Text style={styles.offlineBannerSub}>No internet? CreasPay covers the toll-free SMS.</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.4)" />
+        </TouchableOpacity>
 
         {/* Category Selector Tabs */}
         <View style={styles.categoryTabsRow}>
@@ -978,6 +1042,209 @@ export const BillsScreen: React.FC<Props> = ({
           </View>
         </View>
       </Modal>
+
+      {/* Offline Zero-Data & Zero-Airtime Toll-Free Modal */}
+      <Modal visible={offlineModalVisible} transparent animationType="slide">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalBackdrop}
+        >
+          <View style={styles.offlineSheet}>
+            {/* Header */}
+            <View style={styles.offlineHeaderRow}>
+              <View style={styles.offlineHeaderTitleBox}>
+                <View style={styles.offlineLightningCircle}>
+                  <Ionicons name="flash" size={18} color="#000000" />
+                </View>
+                <View style={{ marginLeft: 12 }}>
+                  <Text style={styles.offlineSheetTitle}>Offline Recharge</Text>
+                  <Text style={styles.offlineSheetSub}>Toll-Free • 0MB Data & ₦0 Airtime</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.offlineCloseBtn}
+                onPress={() => setOfflineModalVisible(false)}
+              >
+                <Ionicons name="close" size={20} color={Colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.tollFreeBadge}>
+              <Ionicons name="shield-checkmark" size={14} color="#10B981" />
+              <Text style={styles.tollFreeBadgeText}>CreasPay covers the ₦4 SMS carrier fee</Text>
+            </View>
+
+            {/* Service Toggle: Data vs Airtime */}
+            <View style={styles.offlineToggleRow}>
+              <TouchableOpacity
+                style={[
+                  styles.offlineToggleBtn,
+                  offlineService === "data" && styles.offlineToggleBtnActive,
+                ]}
+                onPress={() => setOfflineService("data")}
+              >
+                <Ionicons
+                  name="wifi"
+                  size={16}
+                  color={offlineService === "data" ? "#FFFFFF" : Colors.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.offlineToggleText,
+                    offlineService === "data" && styles.offlineToggleTextActive,
+                  ]}
+                >
+                  Data Bundle
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.offlineToggleBtn,
+                  offlineService === "airtime" && styles.offlineToggleBtnActive,
+                ]}
+                onPress={() => setOfflineService("airtime")}
+              >
+                <Ionicons
+                  name="phone-portrait"
+                  size={16}
+                  color={offlineService === "airtime" ? "#FFFFFF" : Colors.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.offlineToggleText,
+                    offlineService === "airtime" && styles.offlineToggleTextActive,
+                  ]}
+                >
+                  Airtime
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Network Selector */}
+            <Text style={styles.offlineFieldLabel}>Select Network</Text>
+            <View style={styles.offlineNetRow}>
+              {["MTN", "Airtel", "Glo", "9mobile"].map((net) => {
+                const isSelected = offlineNetwork.toUpperCase() === net.toUpperCase();
+                return (
+                  <TouchableOpacity
+                    key={net}
+                    style={[
+                      styles.offlineNetChip,
+                      isSelected && styles.offlineNetChipActive,
+                    ]}
+                    onPress={() => setOfflineNetwork(net)}
+                  >
+                    <Text
+                      style={[
+                        styles.offlineNetText,
+                        isSelected && styles.offlineNetTextActive,
+                      ]}
+                    >
+                      {net}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Bundle / Amount Selector */}
+            {offlineService === "data" ? (
+              <>
+                <Text style={styles.offlineFieldLabel}>Choose Data Volume</Text>
+                <View style={styles.offlinePresetsGrid}>
+                  {[
+                    { label: "1GB", price: "₦450" },
+                    { label: "2GB", price: "₦850" },
+                    { label: "3GB", price: "₦1,250" },
+                    { label: "5GB", price: "₦2,000" },
+                  ].map((preset) => {
+                    const isSelected = offlineBundle === preset.label;
+                    return (
+                      <TouchableOpacity
+                        key={preset.label}
+                        style={[
+                          styles.offlinePresetBox,
+                          isSelected && styles.offlinePresetBoxActive,
+                        ]}
+                        onPress={() => setOfflineBundle(preset.label)}
+                      >
+                        <Text
+                          style={[
+                            styles.offlinePresetVol,
+                            isSelected && styles.offlinePresetVolActive,
+                          ]}
+                        >
+                          {preset.label}
+                        </Text>
+                        <Text style={styles.offlinePresetPrice}>{preset.price}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.offlineFieldLabel}>Airtime Amount</Text>
+                <View style={styles.offlinePresetsGrid}>
+                  {["500", "1000", "2000", "5000"].map((amtStr) => {
+                    const isSelected = offlineAirtimeAmount === amtStr;
+                    return (
+                      <TouchableOpacity
+                        key={amtStr}
+                        style={[
+                          styles.offlinePresetBox,
+                          isSelected && styles.offlinePresetBoxActive,
+                        ]}
+                        onPress={() => setOfflineAirtimeAmount(amtStr)}
+                      >
+                        <Text
+                          style={[
+                            styles.offlinePresetVol,
+                            isSelected && styles.offlinePresetVolActive,
+                          ]}
+                        >
+                          ₦{parseInt(amtStr).toLocaleString()}
+                        </Text>
+                        <Text style={styles.offlinePresetPrice}>Airtime</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+
+            {/* 4-digit PIN Input */}
+            <Text style={styles.offlineFieldLabel}>CreasPay 4-Digit Passcode</Text>
+            <TextInput
+              style={styles.offlinePinInput}
+              placeholder="••••"
+              placeholderTextColor={Colors.textMuted}
+              keyboardType="numeric"
+              maxLength={4}
+              secureTextEntry
+              value={offlinePin}
+              onChangeText={setOfflinePin}
+            />
+
+            {/* Action Button */}
+            <TouchableOpacity
+              style={[
+                styles.offlineActionBtn,
+                (!offlinePin || offlinePin.length < 4) && styles.offlineActionBtnDisabled,
+              ]}
+              disabled={!offlinePin || offlinePin.length < 4}
+              onPress={handleLaunchOfflineSms}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="flash" size={18} color="#000000" />
+              <Text style={styles.offlineActionBtnText}>
+                Launch Toll-Free SMS (₦0.00)
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </ScrollView>
   );
 };
@@ -1585,5 +1852,248 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
     color: Colors.textOnSheet,
+  },
+  // Offline Zero-Data & Zero-Airtime Styles
+  offlineBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 215, 0, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 215, 0, 0.4)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    gap: 4,
+  },
+  offlineBtnText: {
+    color: "#FFD700",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  offlineBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "rgba(255, 215, 0, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 215, 0, 0.25)",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 14,
+    marginBottom: 8,
+  },
+  offlineBannerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  offlineIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255, 215, 0, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  offlineBannerTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  offlineBannerSub: {
+    fontSize: 11,
+    color: "rgba(255, 255, 255, 0.65)",
+    marginTop: 2,
+  },
+  offlineSheet: {
+    backgroundColor: "#12131A",
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingHorizontal: 22,
+    paddingTop: 20,
+    paddingBottom: 36,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  offlineHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  offlineHeaderTitleBox: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  offlineLightningCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#FFD700",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  offlineSheetTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  offlineSheetSub: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  offlineCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  tollFreeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(16, 185, 129, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(16, 185, 129, 0.3)",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 6,
+    marginBottom: 16,
+  },
+  tollFreeBadgeText: {
+    color: "#10B981",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  offlineToggleRow: {
+    flexDirection: "row",
+    backgroundColor: "rgba(255, 255, 255, 0.06)",
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 16,
+  },
+  offlineToggleBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  offlineToggleBtnActive: {
+    backgroundColor: Colors.primary,
+  },
+  offlineToggleText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.textMuted,
+  },
+  offlineToggleTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  offlineFieldLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  offlineNetRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 16,
+  },
+  offlineNetChip: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+    alignItems: "center",
+  },
+  offlineNetChipActive: {
+    backgroundColor: "rgba(255, 215, 0, 0.15)",
+    borderColor: "#FFD700",
+  },
+  offlineNetText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.textMuted,
+  },
+  offlineNetTextActive: {
+    color: "#FFD700",
+    fontWeight: "800",
+  },
+  offlinePresetsGrid: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 16,
+  },
+  offlinePresetBox: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    borderRadius: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+    alignItems: "center",
+  },
+  offlinePresetBoxActive: {
+    backgroundColor: "rgba(108, 92, 231, 0.2)",
+    borderColor: Colors.primary,
+  },
+  offlinePresetVol: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: Colors.textMuted,
+  },
+  offlinePresetVolActive: {
+    color: "#FFFFFF",
+  },
+  offlinePresetPrice: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  offlinePinInput: {
+    backgroundColor: "rgba(255, 255, 255, 0.06)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    color: "#FFFFFF",
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: 8,
+    textAlign: "center",
+    paddingVertical: 12,
+    marginBottom: 18,
+  },
+  offlineActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFD700",
+    paddingVertical: 15,
+    borderRadius: 14,
+    gap: 8,
+  },
+  offlineActionBtnDisabled: {
+    opacity: 0.4,
+  },
+  offlineActionBtnText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#000000",
   },
 });
