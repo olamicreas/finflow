@@ -23,8 +23,7 @@
     },
     "plugins": [
       "./plugins/withDisableMac.js",
-      "expo-font",
-      "expo-notifications"
+      "expo-font"
     ],
     "android": {
       "adaptiveIcon": {

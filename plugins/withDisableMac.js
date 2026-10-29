@@ -1,7 +1,7 @@
-const { withXcodeProject } = require('@expo/config-plugins');
+const { withXcodeProject, withEntitlementsPlist } = require('@expo/config-plugins');
 
-function withDisableMacSupport(config) {
-  return withXcodeProject(config, (config) => {
+function withCustomMod(config) {
+  config = withXcodeProject(config, (config) => {
     const xcodeProject = config.modResults;
     const configurations = xcodeProject.pbxXCBuildConfigurationSection();
     for (const key in configurations) {
@@ -14,6 +14,14 @@ function withDisableMacSupport(config) {
     }
     return config;
   });
+
+  config = withEntitlementsPlist(config, (config) => {
+    // Safely delete aps-environment to align with Apple AppStore profile
+    delete config.modResults['aps-environment'];
+    return config;
+  });
+
+  return config;
 }
 
-module.exports = withDisableMacSupport;
+module.exports = withCustomMod;
