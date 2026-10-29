@@ -17,6 +17,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
+import * as Network from "expo-network";
 import { Colors } from "../theme/colors";
 import { formatNGN } from "../utils/formatters";
 import { useFinFlow } from "../context/FinFlowContext";
@@ -136,6 +137,7 @@ export const BillsScreen: React.FC<Props> = ({
   const [meterType, setMeterType] = useState<"prepaid" | "postpaid">("prepaid");
 
   // Zero-Data & Zero-Airtime Offline Recharge State
+  const [isOffline, setIsOffline] = useState(false);
   const [offlineModalVisible, setOfflineModalVisible] = useState(false);
   const [offlineService, setOfflineService] = useState<"data" | "airtime">("data");
   const [offlineNetwork, setOfflineNetwork] = useState<string>(initialDetected || "MTN");
@@ -143,6 +145,29 @@ export const BillsScreen: React.FC<Props> = ({
   const [offlineSelectedPlanId, setOfflineSelectedPlanId] = useState<string>("1000");
   const [offlineAirtimeAmount, setOfflineAirtimeAmount] = useState<string>("1000");
   const [offlinePin, setOfflinePin] = useState<string>("");
+
+  // Network reachability detection: Show offline recharge ONLY when user has no internet
+  useEffect(() => {
+    let isMounted = true;
+    const checkNetwork = async () => {
+      try {
+        const state = await Network.getNetworkStateAsync();
+        const offline = !state.isConnected || state.isInternetReachable === false;
+        if (isMounted) {
+          setIsOffline(offline);
+        }
+      } catch {
+        if (isMounted) setIsOffline(false);
+      }
+    };
+
+    checkNetwork();
+    const interval = setInterval(checkNetwork, 3500);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const availableOfflinePlans: OfflineDataPlan[] = useMemo(() => {
     const netKey = (offlineNetwork || "MTN").trim();
@@ -486,14 +511,18 @@ export const BillsScreen: React.FC<Props> = ({
 
           <Text style={styles.topNavTitle}>Pay Bills</Text>
 
-          <TouchableOpacity
-            style={styles.offlineBtn}
-            onPress={() => setOfflineModalVisible(true)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="cellular-outline" size={13} color="#A29BFE" />
-            <Text style={styles.offlineBtnText}>Offline</Text>
-          </TouchableOpacity>
+          {isOffline ? (
+            <TouchableOpacity
+              style={styles.offlineBtn}
+              onPress={() => setOfflineModalVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="cellular-outline" size={13} color="#A29BFE" />
+              <Text style={styles.offlineBtnText}>Offline</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: 36 }} />
+          )}
         </View>
 
         {/* Balance Hero */}
@@ -504,23 +533,25 @@ export const BillsScreen: React.FC<Props> = ({
           </Text>
         </View>
 
-        {/* Offline Zero-Data & Zero-Airtime Banner */}
-        <TouchableOpacity
-          style={styles.offlineBanner}
-          onPress={() => setOfflineModalVisible(true)}
-          activeOpacity={0.85}
-        >
-          <View style={styles.offlineBannerLeft}>
-            <View style={styles.offlineIconBox}>
-              <Ionicons name="chatbubble-ellipses-outline" size={16} color="#A29BFE" />
+        {/* Offline Zero-Data & Zero-Airtime Banner - ONLY SHOWN WHEN USER HAS NO INTERNET */}
+        {isOffline && (
+          <TouchableOpacity
+            style={styles.offlineBanner}
+            onPress={() => setOfflineModalVisible(true)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.offlineBannerLeft}>
+              <View style={styles.offlineIconBox}>
+                <Ionicons name="chatbubble-ellipses-outline" size={16} color="#A29BFE" />
+              </View>
+              <View style={{ marginLeft: 10, flex: 1 }}>
+                <Text style={styles.offlineBannerTitle}>Zero-Data & Zero-Airtime Recharge</Text>
+                <Text style={styles.offlineBannerSub}>No internet detected. Recharge offline via toll-free SMS.</Text>
+              </View>
             </View>
-            <View style={{ marginLeft: 10, flex: 1 }}>
-              <Text style={styles.offlineBannerTitle}>Zero-Data & Zero-Airtime Recharge</Text>
-              <Text style={styles.offlineBannerSub}>Toll-free SMS recharge powered by CreasPay.</Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.4)" />
-        </TouchableOpacity>
+            <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.4)" />
+          </TouchableOpacity>
+        )}
 
         {/* Category Selector Tabs */}
         <View style={styles.categoryTabsRow}>

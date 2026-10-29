@@ -7,7 +7,7 @@ import {
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
 import { Colors } from "../theme/colors";
 import { CreasPayLogo } from "../components/CreasPayLogo";
 import { UserProfile } from "../context/FinFlowContext";
@@ -25,38 +25,31 @@ export const BiometricLockScreen: React.FC<Props> = ({
 }) => {
   const firstName = user?.full_name?.split(" ")[0] || "there";
 
+  const handleUnlockPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onUnlock();
+  };
+
   return (
     <View style={styles.container}>
-      {/* Top Ambient Glow */}
-      <LinearGradient
-        colors={[
-          "rgba(255, 30, 117, 0.28)",
-          "rgba(255, 51, 102, 0.08)",
-          "transparent",
-        ]}
-        style={styles.ambientGlow}
-        pointerEvents="none"
-      />
-
       <View style={styles.contentWrap}>
-        {/* CreasPay Logo */}
+        {/* CreasPay Logo - Minimalist Monochrome + Pink Touch */}
         <View style={styles.logoWrap}>
-          <CreasPayLogo size={42} showText={true} textSize={22} textColor="#FFFFFF" />
+          <CreasPayLogo size={36} showText={true} textSize={20} textColor="#FFFFFF" />
         </View>
 
         {/* Lock Hero */}
         <View style={styles.heroSection}>
           <TouchableOpacity
             style={styles.biometricCircle}
-            onPress={onUnlock}
-            activeOpacity={0.8}
+            onPress={handleUnlockPress}
+            activeOpacity={0.7}
           >
-            <LinearGradient
-              colors={["#FF1E75", "#FF3366"]}
-              style={styles.biometricGrad}
-            >
-              <Ionicons name="scan-outline" size={44} color="#FFFFFF" />
-            </LinearGradient>
+            <View style={styles.biometricInner}>
+              <Ionicons name="scan-outline" size={38} color="#FFFFFF" />
+              {/* Subtle signature pink accent dot */}
+              <View style={styles.accentDot} />
+            </View>
           </TouchableOpacity>
 
           <Text style={styles.lockTitle}>CreasPay is Locked</Text>
@@ -69,10 +62,10 @@ export const BiometricLockScreen: React.FC<Props> = ({
         <View style={styles.actionWrap}>
           <TouchableOpacity
             style={styles.unlockBtn}
-            onPress={onUnlock}
+            onPress={handleUnlockPress}
             activeOpacity={0.85}
           >
-            <Ionicons name="finger-print" size={20} color="#FFFFFF" />
+            <Ionicons name="scan" size={19} color="#07070C" />
             <Text style={styles.unlockBtnText}>Unlock with Face ID</Text>
           </TouchableOpacity>
 
@@ -94,16 +87,9 @@ export const BiometricLockScreen: React.FC<Props> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: "#07070C",
     justifyContent: "center",
     alignItems: "center",
-  },
-  ambientGlow: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 380,
   },
   contentWrap: {
     width: "100%",
@@ -111,10 +97,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     flex: 1,
-    paddingVertical: Platform.OS === "ios" ? 60 : 40,
+    paddingVertical: Platform.OS === "ios" ? 64 : 44,
   },
   logoWrap: {
-    marginTop: 20,
+    marginTop: 16,
     alignItems: "center",
   },
   heroSection: {
@@ -122,35 +108,44 @@ const styles = StyleSheet.create({
     marginVertical: "auto",
   },
   biometricCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    marginBottom: 28,
-    shadowColor: "#FF1E75",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45,
-    shadowRadius: 18,
-    elevation: 10,
-  },
-  biometricGrad: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 48,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.12)",
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: 26,
+  },
+  biometricInner: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
+  },
+  accentDot: {
+    position: "absolute",
+    bottom: 18,
+    right: 18,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.primary,
   },
   lockTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "800",
     color: "#FFFFFF",
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
     marginBottom: 8,
     textAlign: "center",
   },
   lockSubtitle: {
     fontSize: 14,
     fontWeight: "400",
-    color: "#8E8E93",
+    color: "#94A3B8",
     textAlign: "center",
     lineHeight: 21,
     paddingHorizontal: 16,
@@ -161,28 +156,23 @@ const styles = StyleSheet.create({
   },
   actionWrap: {
     width: "100%",
-    gap: 14,
+    gap: 12,
     marginBottom: Platform.OS === "ios" ? 16 : 10,
   },
   unlockBtn: {
     width: "100%",
-    height: 54,
-    borderRadius: 18,
-    backgroundColor: Colors.primary,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    gap: 8,
   },
   unlockBtnText: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: "#07070C",
     letterSpacing: -0.2,
   },
   switchAccountBtn: {
@@ -191,7 +181,7 @@ const styles = StyleSheet.create({
   },
   switchAccountText: {
     fontSize: 13,
-    fontWeight: "600",
-    color: "#8E8E93",
+    fontWeight: "500",
+    color: "#64748B",
   },
 });

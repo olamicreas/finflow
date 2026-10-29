@@ -701,6 +701,7 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
+            style={styles.historyFilterScrollView}
             contentContainerStyle={styles.historyFilterPills}
           >
             {[
@@ -714,7 +715,7 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
               return (
                 <TouchableOpacity
                   key={pill.id}
-                  style={[styles.filterPill, isActive && styles.filterPillActive]}
+                  style={[styles.historyFilterPill, isActive && styles.historyFilterPillActive]}
                   onPress={() => {
                     Haptics.selectionAsync();
                     setSelectedTxFilter(pill.id as any);
@@ -723,8 +724,8 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
                 >
                   <Text
                     style={[
-                      styles.filterPillText,
-                      isActive && styles.filterPillTextActive,
+                      styles.historyFilterPillText,
+                      isActive && styles.historyFilterPillTextActive,
                     ]}
                   >
                     {pill.label}
@@ -1452,11 +1453,39 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: Colors.textOnSheet,
   },
+  historyFilterScrollView: {
+    height: 40,
+    maxHeight: 40,
+    flexGrow: 0,
+    marginBottom: 8,
+  },
   historyFilterPills: {
     paddingHorizontal: 20,
-    paddingVertical: 6,
+    alignItems: "center",
     gap: 8,
-    marginBottom: 4,
+  },
+  historyFilterPill: {
+    height: 32,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: Colors.sheetSurface,
+    borderWidth: 1,
+    borderColor: Colors.sheetBorder,
+  },
+  historyFilterPillActive: {
+    backgroundColor: "#0B0B12",
+    borderColor: "#0B0B12",
+  },
+  historyFilterPillText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.textOnSheetMuted,
+  },
+  historyFilterPillTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "700",
   },
   historyFullScroll: {
     flex: 1,

@@ -10,19 +10,15 @@ def lerp_color(c1, c2, t):
     t = max(0.0, min(1.0, t))
     return tuple(int(c1[i] + (c2[i] - c1[i]) * t) for i in range(3))
 
-# CreasPay Signature Theme Palette (from mobile/src/theme/colors.ts)
+# CreasPay Refined Minimalist Palette: Crisp White + Touch of App Pink Alone
 C_BG = hex_to_rgb("#07070C")          # Jet Black Obsidian
-C_PINK = hex_to_rgb("#FF1E75")        # Signature Hot Pink
+C_WHITE = hex_to_rgb("#FFFFFF")       # Crisp Pure White
+C_SILVER = hex_to_rgb("#F1F5F9")      # Platinum Silver
+C_PINK = hex_to_rgb("#FF1E75")        # Signature Hot Pink (The ONLY accent)
 C_PINK_LIGHT = hex_to_rgb("#FF4D91")  # Light Hot Pink Highlight
-C_VIOLET = hex_to_rgb("#7000FF")      # Electric Violet
-C_VIOLET_DEEP = hex_to_rgb("#5500D4") # Deep Velvet Violet
-C_CYAN = hex_to_rgb("#00E5FF")        # Neon Cyan
-C_CYAN_LIGHT = hex_to_rgb("#80F2FF")  # Bright Ice Cyan
-C_GOLD = hex_to_rgb("#FFB800")        # Digital Gold Spark
-C_GOLD_LIGHT = hex_to_rgb("#FFE885")  # Radiant Gold Core
 
 def render_raw_emblem(W, H):
-    """Renders the mathematical CP ribbon emblem at high resolution with pure minimalist precision."""
+    """Renders the CP ribbon emblem in sleek monochromatic white with a touch of signature pink alone."""
     cx, cy = W // 2, H // 2
     emblem = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     edraw = ImageDraw.Draw(emblem)
@@ -39,25 +35,18 @@ def render_raw_emblem(W, H):
     p_stem_top_y = p_loop_cy - p_r
     p_stem_bot_y = cy + int(H * 0.200)
 
-    # 1. Draw "C" arc from 40 deg around to 315 deg
+    # 1. Draw "C" arc from 40 deg around to 315 deg (Crisp White / Platinum)
     steps_c = 400
     for i in range(steps_c + 1):
         t = i / steps_c
         deg = 40.0 + t * 275.0
         rad = math.radians(deg)
-        
-        if t < 0.45:
-            color = lerp_color(C_PINK_LIGHT, C_PINK, t / 0.45)
-        elif t < 0.80:
-            color = lerp_color(C_PINK, C_CYAN, (t - 0.45) / 0.35)
-        else:
-            color = lerp_color(C_CYAN, C_CYAN_LIGHT, (t - 0.80) / 0.20)
-            
+        color = lerp_color(C_SILVER, C_WHITE, t)
         x = c_cx + c_r * math.cos(rad)
         y = c_cy + c_r * math.sin(rad)
         edraw.circle((x, y), radius=stroke_r, fill=(*color, 255))
 
-    # 2. Bridge curve from C top to P top
+    # 2. Bridge curve from C top to P top (transitions smoothly into the pink accent)
     c_top_x = c_cx + c_r * math.cos(math.radians(315))
     c_top_y = c_cy + c_r * math.sin(math.radians(315))
     p_top_x = p_stem_x
@@ -74,28 +63,29 @@ def render_raw_emblem(W, H):
         bx = (1-t)**3 * p0[0] + 3*(1-t)**2*t * p1[0] + 3*(1-t)*t**2 * p2[0] + t**3 * p3[0]
         by = (1-t)**3 * p0[1] + 3*(1-t)**2*t * p1[1] + 3*(1-t)*t**2 * p2[1] + t**3 * p3[1]
         
-        color = lerp_color(C_CYAN_LIGHT, C_PINK, t)
+        color = lerp_color(C_WHITE, C_PINK, t)
         edraw.circle((bx, by), radius=stroke_r, fill=(*color, 255))
 
-    # 3. P vertical stem
+    # 3. P vertical stem (Crisp White)
     steps_stem = 250
     for i in range(steps_stem + 1):
         t = i / steps_stem
         sy = p_stem_top_y + t * (p_stem_bot_y - p_stem_top_y)
-        color = lerp_color(C_PINK, C_VIOLET, t)
+        color = lerp_color(C_PINK, C_WHITE, t * 1.5) if t < 0.6 else C_WHITE
         edraw.circle((p_stem_x, sy), radius=stroke_r, fill=(*color, 255))
 
-    # 4. P upper loop (-90 deg to +90 deg)
+    # 4. P upper loop (-90 deg to +90 deg) (The Touch of App Pink Alone)
     steps_p = 300
     for i in range(steps_p + 1):
         t = i / steps_p
         deg = -90.0 + t * 180.0
         rad = math.radians(deg)
         
+        # Smooth rich gradient in pink
         if t < 0.5:
             color = lerp_color(C_PINK, C_PINK_LIGHT, t * 2.0)
         else:
-            color = lerp_color(C_PINK_LIGHT, C_VIOLET, (t - 0.5) * 2.0)
+            color = lerp_color(C_PINK_LIGHT, C_PINK, (t - 0.5) * 2.0)
             
         x = p_stem_x + p_r * math.cos(rad)
         y = p_loop_cy + p_r * math.sin(rad)
@@ -114,33 +104,20 @@ def render_raw_emblem(W, H):
     return centered_emblem
 
 def build_app_icon(W, H):
-    """Builds the full App Store / Home Screen master icon with obsidian glass plate and glows."""
+    """Builds the full App Store master icon with subtle dark aesthetic and single pink warmth."""
     cx, cy = W // 2, H // 2
     canvas = Image.new("RGBA", (W, H), (*C_BG, 255))
     
-    # 1. Ambient Neon Glow
+    # 1. Subtle, elegant warm pink ambient glow (no cyan, no violet)
     glow_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     g_draw = ImageDraw.Draw(glow_layer)
     
-    # Hot Pink glow on left
-    p_cx, p_cy = cx - int(W * 0.12), cy - int(H * 0.04)
-    for r in range(int(W * 0.44), 0, -20):
-        alpha = int(75 * (1 - r / (W * 0.44)))
+    p_cx, p_cy = cx + int(W * 0.08), cy - int(H * 0.05)
+    for r in range(int(W * 0.40), 0, -25):
+        alpha = int(45 * (1 - r / (W * 0.40)))
         g_draw.ellipse([p_cx - r, p_cy - r, p_cx + r, p_cy + r], fill=(*C_PINK, alpha))
         
-    # Violet glow on right
-    v_cx, v_cy = cx + int(W * 0.13), cy + int(H * 0.06)
-    for r in range(int(W * 0.46), 0, -20):
-        alpha = int(85 * (1 - r / (W * 0.46)))
-        g_draw.ellipse([v_cx - r, v_cy - r, v_cx + r, v_cy + r], fill=(*C_VIOLET, alpha))
-        
-    # Cyan highlight
-    c_glow_cx, c_glow_cy = cx - int(W * 0.02), cy - int(H * 0.20)
-    for r in range(int(W * 0.26), 0, -16):
-        alpha = int(50 * (1 - r / (W * 0.26)))
-        g_draw.ellipse([c_glow_cx - r, c_glow_cy - r, c_glow_cx + r, c_glow_cy + r], fill=(*C_CYAN, alpha))
-        
-    glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(110))
+    glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(130))
     canvas = Image.alpha_composite(canvas, glow_layer)
     
     # 2. Translucent Glass Shield Plate
@@ -154,36 +131,37 @@ def build_app_icon(W, H):
     # Drop shadow
     shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     s_draw = ImageDraw.Draw(shadow)
-    s_draw.rounded_rectangle([px0, py0 + 80, px1, py1 + 80], radius=radius, fill=(0, 0, 0, 200))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(100))
+    s_draw.rounded_rectangle([px0, py0 + 60, px1, py1 + 60], radius=radius, fill=(0, 0, 0, 180))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(80))
     canvas = Image.alpha_composite(canvas, shadow)
     
-    # Glass Body
+    # Glass Body (Jet Dark Obsidian Glass)
     plate = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     p_draw = ImageDraw.Draw(plate)
-    p_draw.rounded_rectangle([px0, py0, px1, py1], radius=radius, fill=(12, 12, 20, 245))
+    p_draw.rounded_rectangle([px0, py0, px1, py1], radius=radius, fill=(11, 11, 16, 250))
     
-    # Gradient Rim
-    border_width = 16
+    # Subtle Minimalist Rim
+    border_width = 12
     for b in range(border_width):
+        alpha = int(90 * (1 - b / border_width))
         p_draw.rounded_rectangle(
             [px0 - b, py0 - b, px1 + b, py1 + b],
             radius=radius + b,
-            outline=(*C_PINK, int(150 * (1 - b / border_width))),
+            outline=(255, 255, 255, alpha // 2),
             width=1
         )
     canvas = Image.alpha_composite(canvas, plate)
 
     # 3. Master Emblem & Drop Shadow
     emblem = render_raw_emblem(W, H)
-    emblem_shadow = emblem.filter(ImageFilter.GaussianBlur(35))
-    canvas.paste(emblem_shadow, (0, 30), emblem_shadow)
+    emblem_shadow = emblem.filter(ImageFilter.GaussianBlur(30))
+    canvas.paste(emblem_shadow, (0, 24), emblem_shadow)
     canvas = Image.alpha_composite(canvas, emblem)
 
     return canvas
 
 def main():
-    print("Generating mathematically perfected CreasPay assets (4x supersampling 4096x4096 -> 1024x1024)...")
+    print("Generating refined minimalist CreasPay assets (White with touch of pink alone)...")
     
     # 1. Master High-Resolution App Icon
     hires_app_icon = build_app_icon(4096, 4096)
