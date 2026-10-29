@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,10 @@ import {
   Dimensions,
   Modal,
   Share,
+  TextInput,
+  Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
@@ -70,37 +73,55 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const [selectedTx, setSelectedTx] = useState<TransactionItemData | null>(null);
   const [txReceiptVisible, setTxReceiptVisible] = useState(false);
   const [copiedRef, setCopiedRef] = useState(false);
+  const [fullHistoryVisible, setFullHistoryVisible] = useState(false);
+  const [historySearchQuery, setHistorySearchQuery] = useState("");
 
-  const filteredTransactions = transactions.filter((tx) => {
-    const isCommission =
-      tx.type === "commission" ||
-      tx.category === "commission" ||
-      (tx.narration || "").toLowerCase().includes("platform margin") ||
-      (tx.narration || "").toLowerCase().includes("commission");
-    const isInflow =
-      isCommission ||
-      tx.category === "inflow" ||
-      tx.type === "deposit" ||
-      tx.type === "refund";
-    const isBill =
-      tx.type === "bill_payment" ||
-      tx.category === "utility" ||
-      (tx.narration || "").toLowerCase().includes("payment:") ||
-      (tx.narration || "").toLowerCase().includes("data") ||
-      (tx.narration || "").toLowerCase().includes("airtime");
-    const isCard =
-      tx.type === "card_funding" ||
-      tx.type === "card_withdrawal" ||
-      tx.type === "card_spend" ||
-      tx.currency === "USD";
-    const isOutflow = !isInflow;
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((tx) => {
+      const isCommission =
+        tx.type === "commission" ||
+        tx.category === "commission" ||
+        (tx.narration || "").toLowerCase().includes("platform margin") ||
+        (tx.narration || "").toLowerCase().includes("commission");
+      const isInflow =
+        isCommission ||
+        tx.category === "inflow" ||
+        tx.type === "deposit" ||
+        tx.type === "refund";
+      const isBill =
+        tx.type === "bill_payment" ||
+        tx.category === "utility" ||
+        (tx.narration || "").toLowerCase().includes("payment:") ||
+        (tx.narration || "").toLowerCase().includes("data") ||
+        (tx.narration || "").toLowerCase().includes("airtime");
+      const isCard =
+        tx.type === "card_funding" ||
+        tx.type === "card_withdrawal" ||
+        tx.type === "card_spend" ||
+        tx.currency === "USD";
+      const isOutflow = !isInflow;
 
-    if (selectedTxFilter === "inflow") return isInflow;
-    if (selectedTxFilter === "outflow") return isOutflow;
-    if (selectedTxFilter === "bills") return isBill;
-    if (selectedTxFilter === "cards") return isCard;
-    return true;
-  });
+      if (selectedTxFilter === "inflow") return isInflow;
+      if (selectedTxFilter === "outflow") return isOutflow;
+      if (selectedTxFilter === "bills") return isBill;
+      if (selectedTxFilter === "cards") return isCard;
+      return true;
+    });
+  }, [transactions, selectedTxFilter]);
+
+  const fullHistoryFiltered = useMemo(() => {
+    if (!historySearchQuery.trim()) {
+      return filteredTransactions;
+    }
+    const q = historySearchQuery.trim().toLowerCase();
+    return filteredTransactions.filter((tx) => {
+      const narrationMatch = (tx.narration || "").toLowerCase().includes(q);
+      const cpMatch = (tx.counterparty_name || "").toLowerCase().includes(q);
+      const amtMatch = tx.amount.toString().includes(q);
+      const typeMatch = (tx.type || "").toLowerCase().includes(q);
+      return narrationMatch || cpMatch || amtMatch || typeMatch;
+    });
+  }, [filteredTransactions, historySearchQuery]);
 
   const handleOpenReceipt = (tx: TransactionItemData) => {
     Haptics.selectionAsync();
@@ -414,6 +435,16 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
               {filteredTransactions.length} {filteredTransactions.length === 1 ? "activity" : "activities"}
             </Text>
           </View>
+          {transactions.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setFullHistoryVisible(true)}
+              style={styles.seeAllBtn}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.seeAllText}>See all</Text>
+              <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Filter Pills */}
@@ -476,13 +507,23 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
               </Text>
             </View>
           ) : (
-            filteredTransactions.map((tx) => (
-              <TransactionItem
-                key={tx.id}
-                transaction={tx}
-                onPress={() => handleOpenReceipt(tx)}
-              />
-            ))
+            <ScrollView
+              style={styles.transactionsScrollView}
+              contentContainerStyle={styles.transactionsScrollContent}
+              nestedScrollEnabled={true}
+              showsVerticalScrollIndicator={true}
+              scrollEventThrottle={16}
+              bounces={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              {filteredTransactions.map((tx) => (
+                <TransactionItem
+                  key={tx.id}
+                  transaction={tx}
+                  onPress={() => handleOpenReceipt(tx)}
+                />
+              ))}
+            </ScrollView>
           )}
         </View>
       </View>
@@ -611,6 +652,127 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* FULL TRANSACTION HISTORY MODAL */}
+      <Modal
+        visible={fullHistoryVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setFullHistoryVisible(false)}
+      >
+        <SafeAreaView style={styles.historyModalContainer} edges={["top", "bottom"]}>
+          {/* Header */}
+          <View style={styles.historyHeader}>
+            <View>
+              <Text style={styles.historyHeaderTitle}>Transaction History</Text>
+              <Text style={styles.historyHeaderSub}>
+                {fullHistoryFiltered.length} {fullHistoryFiltered.length === 1 ? "activity" : "activities"} found
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setFullHistoryVisible(false)}
+              style={styles.historyCloseBtn}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close" size={20} color={Colors.textOnSheet} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Search Box */}
+          <View style={styles.historySearchContainer}>
+            <Ionicons name="search" size={17} color={Colors.textOnSheetMuted} style={{ marginRight: 8 }} />
+            <TextInput
+              style={styles.historySearchInput}
+              placeholder="Search by name, description, amount..."
+              placeholderTextColor={Colors.textOnSheetMuted}
+              value={historySearchQuery}
+              onChangeText={setHistorySearchQuery}
+              clearButtonMode="while-editing"
+            />
+            {historySearchQuery.length > 0 && Platform.OS !== "ios" && (
+              <TouchableOpacity onPress={() => setHistorySearchQuery("")}>
+                <Ionicons name="close-circle" size={16} color={Colors.textOnSheetMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Filter Pills in Modal */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.historyFilterPills}
+          >
+            {[
+              { id: "all", label: "All" },
+              { id: "inflow", label: "Money In" },
+              { id: "outflow", label: "Money Out" },
+              { id: "bills", label: "Bills & Data" },
+              { id: "cards", label: "USD Cards" },
+            ].map((pill) => {
+              const isActive = selectedTxFilter === pill.id;
+              return (
+                <TouchableOpacity
+                  key={pill.id}
+                  style={[styles.filterPill, isActive && styles.filterPillActive]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setSelectedTxFilter(pill.id as any);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.filterPillText,
+                      isActive && styles.filterPillTextActive,
+                    ]}
+                  >
+                    {pill.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {/* Scrollable List */}
+          <ScrollView
+            style={styles.historyFullScroll}
+            contentContainerStyle={styles.historyFullScrollContent}
+            showsVerticalScrollIndicator={true}
+            keyboardShouldPersistTaps="handled"
+          >
+            {fullHistoryFiltered.length === 0 ? (
+              <View style={{ paddingVertical: 48, alignItems: "center", justifyContent: "center" }}>
+                <Ionicons
+                  name="receipt-outline"
+                  size={42}
+                  color={Colors.textOnSheetMuted}
+                  style={{ marginBottom: 12, opacity: 0.4 }}
+                />
+                <Text style={{ fontSize: 16, fontWeight: "700", color: Colors.textOnSheet }}>
+                  No transactions found
+                </Text>
+                <Text style={{ fontSize: 13, color: Colors.textOnSheetMuted, marginTop: 4, textAlign: "center", paddingHorizontal: 30 }}>
+                  {historySearchQuery
+                    ? `No transactions match "${historySearchQuery}"`
+                    : "Transactions in this category will appear here in real time."}
+                </Text>
+              </View>
+            ) : (
+              fullHistoryFiltered.map((tx) => (
+                <TransactionItem
+                  key={tx.id}
+                  transaction={tx}
+                  onPress={() => {
+                    setSelectedTx(tx);
+                    setCopiedRef(false);
+                    setTxReceiptVisible(true);
+                  }}
+                />
+              ))
+            )}
+          </ScrollView>
+        </SafeAreaView>
       </Modal>
     </ScrollView>
   );
@@ -1059,6 +1221,12 @@ const styles = StyleSheet.create({
   transactionsList: {
     marginTop: 8,
   },
+  transactionsScrollView: {
+    maxHeight: 380,
+  },
+  transactionsScrollContent: {
+    paddingBottom: 16,
+  },
   sheetSectionSubtitle: {
     fontSize: 12,
     fontWeight: "500",
@@ -1233,5 +1401,68 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: "#FFFFFF",
+  },
+  historyModalContainer: {
+    flex: 1,
+    backgroundColor: Colors.sheetBackground,
+  },
+  historyHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  historyHeaderTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: Colors.textOnSheet,
+    letterSpacing: -0.3,
+  },
+  historyHeaderSub: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: Colors.textOnSheetMuted,
+    marginTop: 2,
+  },
+  historyCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0, 0, 0, 0.05)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  historySearchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.04)",
+    borderRadius: 14,
+    marginHorizontal: 20,
+    paddingHorizontal: 14,
+    height: 44,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "rgba(0, 0, 0, 0.06)",
+  },
+  historySearchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.textOnSheet,
+  },
+  historyFilterPills: {
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    gap: 8,
+    marginBottom: 4,
+  },
+  historyFullScroll: {
+    flex: 1,
+  },
+  historyFullScrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
   },
 });
