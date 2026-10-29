@@ -181,6 +181,18 @@ export const api = {
   getBeneficiaries: () => request<any[]>("/transfers/beneficiaries"),
 
   // FX
+  getFxRate: () =>
+    request<{
+      base_currency: string;
+      target_currency: string;
+      buy_rate: number;
+      sell_rate: number;
+      inverse_buy_rate: number;
+      inverse_sell_rate: number;
+      source: string;
+      updated_at: string;
+    }>("/fx/rate"),
+
   getFxQuote: (from_currency: string, to_currency: string, amount: number) =>
     request<any>("/fx/quote", {
       method: "POST",

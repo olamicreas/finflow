@@ -18,8 +18,8 @@ import { VirtualCardView } from "../components/VirtualCardView";
 import { PasscodeModal } from "../components/PasscodeModal";
 import { CreasPayLogo } from "../components/CreasPayLogo";
 import { api } from "../api/client";
+import { notificationService } from "../services/notificationService";
 
-const LIVE_FX_RATE = 1520.0;
 const CARD_CREATION_FEE_USD = 3.0; // $2.00 base + $1.00 platform gain
 
 export const CardsScreen: React.FC = () => {
@@ -32,7 +32,11 @@ export const CardsScreen: React.FC = () => {
     refreshData,
     showToast,
     setAddMoneyModalVisible,
+    fxRates,
   } = useFinFlow();
+
+  const buyRate = fxRates?.buy_rate || 1388.11;
+  const sellRate = fxRates?.sell_rate || 1371.00;
 
   const [unmaskedDetails, setUnmaskedDetails] = useState<any>(null);
   const [cardTxs, setCardTxs] = useState<any[]>([]);
@@ -156,6 +160,7 @@ export const CardsScreen: React.FC = () => {
           Alert.alert("Invalid Amount", "Minimum top up is $1.00");
           return;
         }
+        const estNgn = amt * buyRate;
         await api.fundCard(activeCard.id, {
           amount: amt,
           source_wallet_currency: "NGN",
@@ -163,7 +168,12 @@ export const CardsScreen: React.FC = () => {
         });
         setFundModalVisible(false);
         await refreshData();
-        showToast(`+$${amt.toFixed(2)} added to card`);
+        showToast(`+$${amt.toFixed(2)} added to card (₦${estNgn.toLocaleString(undefined, { maximumFractionDigits: 2 })})`);
+        notificationService.triggerAlert(
+          "USD Card Funded",
+          `+$${amt.toFixed(2)} added to USD Card (••${activeCard.last4}).`,
+          { type: "card_funding", amount: amt }
+        );
       } catch (err: any) {
         Alert.alert("Top Up Error", err.message);
       }
@@ -174,6 +184,11 @@ export const CardsScreen: React.FC = () => {
           Alert.alert("Invalid Amount", "Minimum withdrawal is $1.00");
           return;
         }
+        if (amt > (activeCard.balance || 0)) {
+          Alert.alert("Insufficient Card Balance", `Available balance is $${(activeCard.balance || 0).toFixed(2)}`);
+          return;
+        }
+        const estNgn = amt * sellRate;
         await api.withdrawCard(activeCard.id, {
           amount: amt,
           dest_wallet_currency: "NGN",
@@ -181,7 +196,12 @@ export const CardsScreen: React.FC = () => {
         });
         setWithdrawModalVisible(false);
         await refreshData();
-        showToast(`$${amt.toFixed(2)} withdrawn to Naira balance`);
+        showToast(`$${amt.toFixed(2)} withdrawn (+₦${estNgn.toLocaleString(undefined, { maximumFractionDigits: 2 })})`);
+        notificationService.triggerAlert(
+          "Card Withdrawn",
+          `$${amt.toFixed(2)} from USD Card (••${activeCard.last4}) credited to your Naira balance (+₦${estNgn.toLocaleString(undefined, { maximumFractionDigits: 2 })}).`,
+          { type: "card_withdrawal", amount: estNgn }
+        );
       } catch (err: any) {
         Alert.alert("Withdrawal Error", err.message);
       }
@@ -190,7 +210,7 @@ export const CardsScreen: React.FC = () => {
 
   const initialAmountParsed = parseFloat(newCardAmount || "0");
   const totalCreateUsd = initialAmountParsed + CARD_CREATION_FEE_USD;
-  const totalCreateNgn = totalCreateUsd * LIVE_FX_RATE;
+  const totalCreateNgn = totalCreateUsd * buyRate;
 
   return (
     <ScrollView
@@ -391,7 +411,7 @@ export const CardsScreen: React.FC = () => {
               <View style={styles.convDivider} />
               <View style={styles.convRow}>
                 <Text style={styles.convLabel}>Exchange Rate</Text>
-                <Text style={styles.convVal}>₦{LIVE_FX_RATE.toLocaleString()} / $1</Text>
+                <Text style={styles.convVal}>₦{buyRate.toLocaleString(undefined, { minimumFractionDigits: 2 })} / $1</Text>
               </View>
               <View style={styles.convDivider} />
               <View style={styles.convRow}>
@@ -491,14 +511,14 @@ export const CardsScreen: React.FC = () => {
             <View style={styles.conversionCard}>
               <View style={styles.convRow}>
                 <Text style={styles.convLabel}>Exchange Rate</Text>
-                <Text style={styles.convVal}>₦{LIVE_FX_RATE.toLocaleString()} / $1</Text>
+                <Text style={styles.convVal}>₦{buyRate.toLocaleString(undefined, { minimumFractionDigits: 2 })} / $1</Text>
               </View>
               <View style={styles.convDivider} />
               <View style={styles.convRow}>
                 <Text style={styles.convLabel}>Total Naira Debit</Text>
                 <Text style={[styles.convVal, { fontWeight: "800" }]}>
                   ₦
-                  {(parseFloat(fundAmount || "0") * LIVE_FX_RATE).toLocaleString(
+                  {(parseFloat(fundAmount || "0") * buyRate).toLocaleString(
                     undefined,
                     { maximumFractionDigits: 2 }
                   )}
@@ -555,14 +575,14 @@ export const CardsScreen: React.FC = () => {
             <View style={styles.conversionCard}>
               <View style={styles.convRow}>
                 <Text style={styles.convLabel}>Conversion Rate</Text>
-                <Text style={styles.convVal}>₦1,485.00 / $1</Text>
+                <Text style={styles.convVal}>₦{sellRate.toLocaleString(undefined, { minimumFractionDigits: 2 })} / $1</Text>
               </View>
               <View style={styles.convDivider} />
               <View style={styles.convRow}>
                 <Text style={styles.convLabel}>You Receive</Text>
                 <Text style={[styles.convVal, { fontWeight: "800" }]}>
                   ₦
-                  {(parseFloat(fundAmount || "0") * 1485.0).toLocaleString(
+                  {(parseFloat(fundAmount || "0") * sellRate).toLocaleString(
                     undefined,
                     { maximumFractionDigits: 2 }
                   )}

@@ -82,6 +82,19 @@ export interface TransactionItemData {
   created_at: string;
 }
 
+export interface LiveFxRateData {
+  buy_rate: number;
+  sell_rate: number;
+  source?: string;
+  updated_at?: string;
+}
+
+export const DEFAULT_FX_RATES: LiveFxRateData = {
+  buy_rate: 1388.11,
+  sell_rate: 1371.00,
+  source: "bitnob_live",
+};
+
 interface FinFlowContextType {
   user: UserProfile | null;
   isAuthenticated: boolean;
@@ -93,6 +106,7 @@ interface FinFlowContextType {
   activeCard: VirtualCardItem | null;
   setActiveCard: (card: VirtualCardItem | null) => void;
   transactions: TransactionItemData[];
+  fxRates: LiveFxRateData;
   toastMessage: string | null;
   showToast: (msg: string) => void;
   login: (email: string, pass: string) => Promise<void>;
@@ -120,6 +134,7 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [cards, setCards] = useState<VirtualCardItem[]>([]);
   const [activeCard, setActiveCard] = useState<VirtualCardItem | null>(null);
   const [transactions, setTransactions] = useState<TransactionItemData[]>([]);
+  const [fxRates, setFxRates] = useState<LiveFxRateData>(DEFAULT_FX_RATES);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -136,6 +151,15 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Add Money Modal state
   const [addMoneyModalVisible, setAddMoneyModalVisible] = useState<boolean>(false);
+
+  // Register device push notifications on user login
+  useEffect(() => {
+    if (user) {
+      notificationService.registerPushToken(async (token: string) => {
+        await api.registerPushToken(token);
+      });
+    }
+  }, [user?.id]);
 
   // 1. Initial Session Restore & Biometric Check on App Launch
   useEffect(() => {
@@ -211,12 +235,22 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (isSyncingRef.current) return;
     try {
       isSyncingRef.current = true;
-      const [walletsData, vaData, cardsData, txData] = await Promise.all([
+      const [walletsData, vaData, cardsData, txData, fxData] = await Promise.all([
         api.getWallets().catch(() => null),
         api.getVirtualAccount().catch(() => null),
         api.getCards().catch(() => null),
         api.getTransactions().catch(() => null),
+        api.getFxRate().catch(() => null),
       ]);
+
+      if (fxData && fxData.buy_rate && fxData.sell_rate) {
+        setFxRates({
+          buy_rate: Number(fxData.buy_rate),
+          sell_rate: Number(fxData.sell_rate),
+          source: fxData.source,
+          updated_at: fxData.updated_at,
+        });
+      }
 
       if (walletsData && Array.isArray(walletsData)) {
         setWallets(walletsData);
@@ -244,16 +278,31 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (txData && Array.isArray(txData)) {
         if (prevTxCountRef.current !== null && txData.length > prevTxCountRef.current) {
           const latestTx = txData[0];
-          if (latestTx && (latestTx.category === "airtime" || latestTx.category === "data" || latestTx.category === "bill")) {
-            if (latestTx.status === "successful") {
-              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-              showToast(`${latestTx.narration || "Utility purchase"} Successful!`);
-              notificationService.triggerAlert(
-                "Utility Delivered",
-                `${latestTx.narration || "Payment"} completed successfully.`,
-                { type: "bill" }
-              );
+          if (latestTx) {
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+            let notifTitle = "Transaction Processed";
+            let notifBody = latestTx.narration || "A new transaction was recorded.";
+            const formattedAmt = `${latestTx.currency === "USD" ? "$" : "₦"}${latestTx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
+            if (latestTx.type === "credit" || latestTx.category === "inflow" || latestTx.category === "deposit") {
+              notifTitle = `Money In! +${formattedAmt}`;
+              notifBody = latestTx.narration || `Your CreasPay account was credited with ${formattedAmt}.`;
+            } else if (latestTx.category === "transfer" || latestTx.type === "transfer") {
+              notifTitle = `Transfer Sent • ${formattedAmt}`;
+              notifBody = latestTx.narration || `Sent ${formattedAmt} to ${latestTx.counterparty_name || "recipient"}.`;
+            } else if (latestTx.category === "card" || latestTx.type?.includes("card")) {
+              notifTitle = `Card Transaction • ${formattedAmt}`;
+              notifBody = latestTx.narration || `Virtual USD card transaction processed.`;
+            } else if (latestTx.category === "fx") {
+              notifTitle = `Currency Exchanged • ${formattedAmt}`;
+              notifBody = latestTx.narration || `Currency conversion completed.`;
+            } else if (latestTx.category === "airtime" || latestTx.category === "data" || latestTx.category === "utility" || latestTx.category === "bill") {
+              notifTitle = `Utility Delivered • ${formattedAmt}`;
+              notifBody = latestTx.narration || `Payment of ${formattedAmt} completed successfully.`;
             }
+
+            showToast(notifTitle);
+            notificationService.triggerAlert(notifTitle, notifBody, latestTx);
           }
         }
         prevTxCountRef.current = txData.length;
@@ -443,6 +492,7 @@ export const FinFlowProvider: React.FC<{ children: React.ReactNode }> = ({ child
         activeCard,
         setActiveCard,
         transactions,
+        fxRates,
         toastMessage,
         showToast,
         login,
