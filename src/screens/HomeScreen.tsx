@@ -66,18 +66,19 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const hasCard = cards.length > 0;
   const months = ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
 
-  const [selectedTxFilter, setSelectedTxFilter] = useState<"all" | "inflow" | "outflow" | "bills" | "rewards">("all");
+  const [selectedTxFilter, setSelectedTxFilter] = useState<"all" | "inflow" | "outflow" | "bills" | "cards">("all");
   const [selectedTx, setSelectedTx] = useState<TransactionItemData | null>(null);
   const [txReceiptVisible, setTxReceiptVisible] = useState(false);
   const [copiedRef, setCopiedRef] = useState(false);
 
   const filteredTransactions = transactions.filter((tx) => {
-    const isCashback =
-      tx.type === "cashback" ||
-      tx.category === "reward" ||
-      (tx.narration || "").toLowerCase().includes("cashback");
+    const isCommission =
+      tx.type === "commission" ||
+      tx.category === "commission" ||
+      (tx.narration || "").toLowerCase().includes("platform margin") ||
+      (tx.narration || "").toLowerCase().includes("commission");
     const isInflow =
-      isCashback ||
+      isCommission ||
       tx.category === "inflow" ||
       tx.type === "deposit" ||
       tx.type === "refund";
@@ -87,12 +88,17 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
       (tx.narration || "").toLowerCase().includes("payment:") ||
       (tx.narration || "").toLowerCase().includes("data") ||
       (tx.narration || "").toLowerCase().includes("airtime");
+    const isCard =
+      tx.type === "card_funding" ||
+      tx.type === "card_withdrawal" ||
+      tx.type === "card_spend" ||
+      tx.currency === "USD";
     const isOutflow = !isInflow;
 
     if (selectedTxFilter === "inflow") return isInflow;
     if (selectedTxFilter === "outflow") return isOutflow;
     if (selectedTxFilter === "bills") return isBill;
-    if (selectedTxFilter === "rewards") return isCashback;
+    if (selectedTxFilter === "cards") return isCard;
     return true;
   });
 
@@ -421,7 +427,7 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
             { id: "inflow", label: "Money In" },
             { id: "outflow", label: "Money Out" },
             { id: "bills", label: "Bills & Data" },
-            { id: "rewards", label: "Cashback" },
+            { id: "cards", label: "USD Cards" },
           ].map((pill) => {
             const isActive = selectedTxFilter === pill.id;
             return (
@@ -461,11 +467,11 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
               </Text>
               <Text style={{ fontSize: 12, color: Colors.textOnSheetMuted, marginTop: 4, textAlign: "center", paddingHorizontal: 20 }}>
                 {selectedTxFilter === "inflow"
-                  ? "Inbound transfers, bank deposits, and cashback rewards appear here."
+                  ? "Inbound transfers, bank deposits, and margin inflows appear here."
                   : selectedTxFilter === "bills"
                   ? "Airtime, internet data, electricity, and cable payments appear here."
-                  : selectedTxFilter === "rewards"
-                  ? "Every time you purchase data or airtime, your cashback commissions appear here."
+                  : selectedTxFilter === "cards"
+                  ? "USD virtual card funding, withdrawals, and transactions appear here."
                   : "All completed transactions and wallet activities will appear here in real time."}
               </Text>
             </View>
@@ -513,12 +519,12 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
                 {selectedTx ? selectedTx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
               </Text>
 
-              {/* Commission/Cashback highlight banner */}
-              {(selectedTx?.type === "cashback" || (selectedTx?.earnings_amount && selectedTx.earnings_amount > 0)) && (
+              {/* App Owner Platform Margin highlight banner */}
+              {(selectedTx?.type === "commission" || (selectedTx?.narration || "").toLowerCase().includes("platform margin")) && (
                 <View style={styles.cashbackBanner}>
-                  <Ionicons name="sparkles" size={14} color="#10B981" style={{ marginRight: 5 }} />
-                  <Text style={styles.cashbackBannerText}>
-                    Cashback Reward: +₦{selectedTx.type === "cashback" ? selectedTx.amount.toFixed(2) : selectedTx.earnings_amount?.toFixed(2)}
+                  <Ionicons name="trending-up" size={14} color="#6C5CE7" style={{ marginRight: 5 }} />
+                  <Text style={[styles.cashbackBannerText, { color: "#6C5CE7" }]}>
+                    Platform Margin: +₦{selectedTx?.amount?.toFixed(2) || "0.00"}
                   </Text>
                 </View>
               )}

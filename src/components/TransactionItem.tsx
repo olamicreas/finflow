@@ -11,27 +11,28 @@ interface Props {
 }
 
 export const TransactionItem: React.FC<Props> = ({ transaction, onPress }) => {
-  const isCashback =
-    transaction.type === "cashback" ||
-    transaction.category === "reward" ||
-    transaction.narration.toLowerCase().includes("cashback");
+  const isCommission =
+    transaction.type === "commission" ||
+    transaction.category === "commission" ||
+    transaction.narration.toLowerCase().includes("platform margin") ||
+    transaction.narration.toLowerCase().includes("commission");
 
   const isPositive =
-    isCashback ||
+    isCommission ||
     transaction.category === "inflow" ||
     transaction.type === "deposit" ||
     transaction.type === "refund" ||
     (transaction.type === "card_withdrawal" && transaction.currency === "NGN");
 
   const getVisualConfig = () => {
-    if (isCashback) {
+    if (isCommission) {
       return {
-        icon: "sparkles",
-        color: "#10B981",
-        bg: "rgba(16, 185, 129, 0.12)",
-        badge: "Cashback",
-        badgeColor: "#10B981",
-        badgeBg: "rgba(16, 185, 129, 0.10)",
+        icon: "trending-up-outline",
+        color: "#6C5CE7",
+        bg: "rgba(108, 92, 231, 0.12)",
+        badge: "Margin",
+        badgeColor: "#6C5CE7",
+        badgeBg: "rgba(108, 92, 231, 0.10)",
       };
     }
     switch (transaction.type) {

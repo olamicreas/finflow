@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -64,6 +64,44 @@ const DATA_FILTERS: { id: DataPlanFilter; label: string; icon: any }[] = [
   { id: "router", label: "Router & 5G", icon: "wifi-outline" },
 ];
 
+interface OfflineDataPlan {
+  id: string;
+  label: string;
+  price: number;
+  validity: string;
+}
+
+const ACTUAL_OFFLINE_PLANS: Record<string, OfflineDataPlan[]> = {
+  MTN: [
+    { id: "500", label: "500MB", price: 317, validity: "7 Days" },
+    { id: "1000", label: "1GB", price: 430, validity: "7 Days" },
+    { id: "2000", label: "2GB", price: 850, validity: "7 Days" },
+    { id: "3000", label: "3GB", price: 1270, validity: "7 Days" },
+    { id: "5000.00", label: "5GB", price: 2601, validity: "30 Days" },
+  ],
+  Airtel: [
+    { id: "499.91", label: "1GB", price: 520, validity: "1 Day" },
+    { id: "599.91", label: "1.5GB", price: 620, validity: "2 Days" },
+    { id: "749.91", label: "2GB", price: 780, validity: "2 Days" },
+    { id: "999.91", label: "3GB", price: 1040, validity: "2 Days" },
+    { id: "1499.91", label: "5GB", price: 1550, validity: "2 Days" },
+  ],
+  Glo: [
+    { id: "500.01", label: "1.5GB", price: 520, validity: "14 Days" },
+    { id: "500.02", label: "2GB", price: 520, validity: "1 Day" },
+    { id: "1500.01", label: "5GB", price: 1550, validity: "30 Days" },
+    { id: "2000.01", label: "6.15GB", price: 2070, validity: "30 Days" },
+    { id: "2500.01", label: "7.5GB", price: 2590, validity: "30 Days" },
+  ],
+  "9mobile": [
+    { id: "1000.01", label: "1.1GB", price: 1040, validity: "30 Days" },
+    { id: "1500.01", label: "1.75GB", price: 1550, validity: "7 Days" },
+    { id: "3000.01", label: "3.91GB", price: 3110, validity: "30 Days" },
+    { id: "4000.01", label: "5.10GB", price: 4140, validity: "30 Days" },
+    { id: "5000.01", label: "6.5GB", price: 5180, validity: "30 Days" },
+  ],
+};
+
 interface Props {
   navigation?: {
     navigate: (screen: string) => void;
@@ -101,21 +139,88 @@ export const BillsScreen: React.FC<Props> = ({
   const [offlineModalVisible, setOfflineModalVisible] = useState(false);
   const [offlineService, setOfflineService] = useState<"data" | "airtime">("data");
   const [offlineNetwork, setOfflineNetwork] = useState<string>(initialDetected || "MTN");
-  const [offlineBundle, setOfflineBundle] = useState<string>("2GB");
+  const [offlineRecipientPhone, setOfflineRecipientPhone] = useState<string>(initialPhone);
+  const [offlineSelectedPlanId, setOfflineSelectedPlanId] = useState<string>("1000");
   const [offlineAirtimeAmount, setOfflineAirtimeAmount] = useState<string>("1000");
   const [offlinePin, setOfflinePin] = useState<string>("");
 
+  const availableOfflinePlans: OfflineDataPlan[] = useMemo(() => {
+    const netKey = (offlineNetwork || "MTN").trim();
+    const matchedKey =
+      Object.keys(ACTUAL_OFFLINE_PLANS).find(
+        (k) => k.toLowerCase() === netKey.toLowerCase()
+      ) || "MTN";
+
+    // If live billers are already loaded in memory, try to find matching plans
+    const liveNetPlans = billers.filter(
+      (b) =>
+        b.category === "data" &&
+        (b.network?.toLowerCase() === matchedKey.toLowerCase() ||
+          b.biller_code?.toLowerCase() === matchedKey.toLowerCase())
+    );
+
+    if (liveNetPlans.length > 0) {
+      const popular: OfflineDataPlan[] = [];
+      const sizes = ["500MB", "1GB", "1.5GB", "2GB", "3GB", "5GB"];
+      for (const sz of sizes) {
+        const match = liveNetPlans.find((p) => {
+          const pName = (p.name || "").toUpperCase();
+          const pAllowance = (p.data_allowance || "").toUpperCase();
+          return pAllowance === sz || pName.startsWith(sz) || pName.includes(` ${sz}`);
+        });
+        if (match && !popular.some((x) => x.id === (match.item_code || match.id))) {
+          popular.push({
+            id: String(match.item_code || match.product_id || match.id),
+            label: sz,
+            price: Math.round(Number(match.amount)),
+            validity: match.validity || "Active",
+          });
+        }
+      }
+      if (popular.length >= 3) {
+        return popular;
+      }
+    }
+
+    return ACTUAL_OFFLINE_PLANS[matchedKey] || ACTUAL_OFFLINE_PLANS["MTN"];
+  }, [offlineNetwork, billers]);
+
+  useEffect(() => {
+    if (availableOfflinePlans.length > 0) {
+      const match = availableOfflinePlans.find((p) => p.id === offlineSelectedPlanId);
+      if (!match) {
+        setOfflineSelectedPlanId(availableOfflinePlans[0].id);
+      }
+    }
+  }, [availableOfflinePlans]);
+
   const handleLaunchOfflineSms = async () => {
     if (!offlinePin || offlinePin.length < 4) {
-      Alert.alert("Enter PIN", "Please enter your 4-digit transaction passcode.");
+      Alert.alert("Enter Passcode", "Please enter your 4-digit transaction passcode.");
       return;
     }
+    const cleanPhone = offlineRecipientPhone.replace(/\D/g, "");
+    if (cleanPhone.length < 10) {
+      Alert.alert("Recipient Phone", "Please enter a valid 11-digit recipient phone number.");
+      return;
+    }
+    const normPhone =
+      cleanPhone.length === 10
+        ? "0" + cleanPhone
+        : cleanPhone.startsWith("234")
+        ? "0" + cleanPhone.slice(3)
+        : cleanPhone;
+
     const shortcode = "38477"; // CreasPay toll-free reverse-billed inbound shortcode
     let cmd = "";
     if (offlineService === "data") {
-      cmd = `CPAY DATA ${offlineNetwork} ${offlineBundle} ${offlinePin}`;
+      const selectedPlan =
+        availableOfflinePlans.find((p) => p.id === offlineSelectedPlanId) ||
+        availableOfflinePlans[0];
+      const planCode = selectedPlan?.id || "1000";
+      cmd = `CPAY DATA ${offlineNetwork.toUpperCase()} ${planCode} ${normPhone} ${offlinePin}`;
     } else {
-      cmd = `CPAY AIRTIME ${offlineNetwork} ${offlineAirtimeAmount} ${offlinePin}`;
+      cmd = `CPAY AIRTIME ${offlineNetwork.toUpperCase()} ${offlineAirtimeAmount} ${normPhone} ${offlinePin}`;
     }
 
     const sep = Platform.OS === "ios" ? "&" : "?";
@@ -128,7 +233,7 @@ export const BillsScreen: React.FC<Props> = ({
         await Linking.openURL(url);
         setOfflineModalVisible(false);
         setOfflinePin("");
-        showToast("Opening SMS • Send with ₦0.00 airtime to activate");
+        showToast("Opening SMS • Toll-free carrier delivery");
       } else {
         Alert.alert("SMS Not Supported", `Please text: "${cmd}" to ${shortcode}`);
       }
@@ -139,13 +244,18 @@ export const BillsScreen: React.FC<Props> = ({
 
   // Pre-fill registered phone number if profile loads asynchronously
   useEffect(() => {
-    if (user?.phone_number && !customer) {
+    if (user?.phone_number) {
       const formatted = formatUserPhoneForInput(user.phone_number);
-      setCustomer(formatted);
-      const detected = detectNigerianNetwork(formatted);
-      setDetectedNetwork(detected);
-      if (detected) {
-        setSelectedNetwork(detected);
+      if (!customer) {
+        setCustomer(formatted);
+        const detected = detectNigerianNetwork(formatted);
+        setDetectedNetwork(detected);
+        if (detected) {
+          setSelectedNetwork(detected);
+        }
+      }
+      if (!offlineRecipientPhone) {
+        setOfflineRecipientPhone(formatted);
       }
     }
   }, [user?.phone_number]);
@@ -381,7 +491,7 @@ export const BillsScreen: React.FC<Props> = ({
             onPress={() => setOfflineModalVisible(true)}
             activeOpacity={0.8}
           >
-            <Ionicons name="flash" size={13} color="#FFD700" />
+            <Ionicons name="cellular-outline" size={13} color="#A29BFE" />
             <Text style={styles.offlineBtnText}>Offline</Text>
           </TouchableOpacity>
         </View>
@@ -402,11 +512,11 @@ export const BillsScreen: React.FC<Props> = ({
         >
           <View style={styles.offlineBannerLeft}>
             <View style={styles.offlineIconBox}>
-              <Ionicons name="flash" size={15} color="#FFD700" />
+              <Ionicons name="chatbubble-ellipses-outline" size={16} color="#A29BFE" />
             </View>
             <View style={{ marginLeft: 10, flex: 1 }}>
-              <Text style={styles.offlineBannerTitle}>Zero-Data & Zero-Airtime Recharge ⚡</Text>
-              <Text style={styles.offlineBannerSub}>No internet? CreasPay covers the toll-free SMS.</Text>
+              <Text style={styles.offlineBannerTitle}>Zero-Data & Zero-Airtime Recharge</Text>
+              <Text style={styles.offlineBannerSub}>Toll-free SMS recharge powered by CreasPay.</Text>
             </View>
           </View>
           <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.4)" />
@@ -1053,11 +1163,11 @@ export const BillsScreen: React.FC<Props> = ({
             {/* Header */}
             <View style={styles.offlineHeaderRow}>
               <View style={styles.offlineHeaderTitleBox}>
-                <View style={styles.offlineLightningCircle}>
-                  <Ionicons name="flash" size={18} color="#000000" />
+                <View style={styles.offlineHeaderIconBox}>
+                  <Ionicons name="chatbubble-ellipses-outline" size={18} color="#A29BFE" />
                 </View>
                 <View style={{ marginLeft: 12 }}>
-                  <Text style={styles.offlineSheetTitle}>Offline Recharge</Text>
+                  <Text style={styles.offlineSheetTitle}>Offline SMS Recharge</Text>
                   <Text style={styles.offlineSheetSub}>Toll-Free • 0MB Data & ₦0 Airtime</Text>
                 </View>
               </View>
@@ -1071,177 +1181,234 @@ export const BillsScreen: React.FC<Props> = ({
 
             <View style={styles.tollFreeBadge}>
               <Ionicons name="shield-checkmark" size={14} color="#10B981" />
-              <Text style={styles.tollFreeBadgeText}>CreasPay covers the ₦4 SMS carrier fee</Text>
+              <Text style={styles.tollFreeBadgeText}>CreasPay covers the ₦4 carrier SMS fee</Text>
             </View>
 
-            {/* Service Toggle: Data vs Airtime */}
-            <View style={styles.offlineToggleRow}>
-              <TouchableOpacity
-                style={[
-                  styles.offlineToggleBtn,
-                  offlineService === "data" && styles.offlineToggleBtnActive,
-                ]}
-                onPress={() => setOfflineService("data")}
-              >
-                <Ionicons
-                  name="wifi"
-                  size={16}
-                  color={offlineService === "data" ? "#FFFFFF" : Colors.textMuted}
-                />
-                <Text
-                  style={[
-                    styles.offlineToggleText,
-                    offlineService === "data" && styles.offlineToggleTextActive,
-                  ]}
-                >
-                  Data Bundle
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.offlineToggleBtn,
-                  offlineService === "airtime" && styles.offlineToggleBtnActive,
-                ]}
-                onPress={() => setOfflineService("airtime")}
-              >
-                <Ionicons
-                  name="phone-portrait"
-                  size={16}
-                  color={offlineService === "airtime" ? "#FFFFFF" : Colors.textMuted}
-                />
-                <Text
-                  style={[
-                    styles.offlineToggleText,
-                    offlineService === "airtime" && styles.offlineToggleTextActive,
-                  ]}
-                >
-                  Airtime
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Network Selector */}
-            <Text style={styles.offlineFieldLabel}>Select Network</Text>
-            <View style={styles.offlineNetRow}>
-              {["MTN", "Airtel", "Glo", "9mobile"].map((net) => {
-                const isSelected = offlineNetwork.toUpperCase() === net.toUpperCase();
-                return (
-                  <TouchableOpacity
-                    key={net}
-                    style={[
-                      styles.offlineNetChip,
-                      isSelected && styles.offlineNetChipActive,
-                    ]}
-                    onPress={() => setOfflineNetwork(net)}
-                  >
-                    <Text
-                      style={[
-                        styles.offlineNetText,
-                        isSelected && styles.offlineNetTextActive,
-                      ]}
-                    >
-                      {net}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* Bundle / Amount Selector */}
-            {offlineService === "data" ? (
-              <>
-                <Text style={styles.offlineFieldLabel}>Choose Data Volume</Text>
-                <View style={styles.offlinePresetsGrid}>
-                  {[
-                    { label: "1GB", price: "₦450" },
-                    { label: "2GB", price: "₦850" },
-                    { label: "3GB", price: "₦1,250" },
-                    { label: "5GB", price: "₦2,000" },
-                  ].map((preset) => {
-                    const isSelected = offlineBundle === preset.label;
-                    return (
-                      <TouchableOpacity
-                        key={preset.label}
-                        style={[
-                          styles.offlinePresetBox,
-                          isSelected && styles.offlinePresetBoxActive,
-                        ]}
-                        onPress={() => setOfflineBundle(preset.label)}
-                      >
-                        <Text
-                          style={[
-                            styles.offlinePresetVol,
-                            isSelected && styles.offlinePresetVolActive,
-                          ]}
-                        >
-                          {preset.label}
-                        </Text>
-                        <Text style={styles.offlinePresetPrice}>{preset.price}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </>
-            ) : (
-              <>
-                <Text style={styles.offlineFieldLabel}>Airtime Amount</Text>
-                <View style={styles.offlinePresetsGrid}>
-                  {["500", "1000", "2000", "5000"].map((amtStr) => {
-                    const isSelected = offlineAirtimeAmount === amtStr;
-                    return (
-                      <TouchableOpacity
-                        key={amtStr}
-                        style={[
-                          styles.offlinePresetBox,
-                          isSelected && styles.offlinePresetBoxActive,
-                        ]}
-                        onPress={() => setOfflineAirtimeAmount(amtStr)}
-                      >
-                        <Text
-                          style={[
-                            styles.offlinePresetVol,
-                            isSelected && styles.offlinePresetVolActive,
-                          ]}
-                        >
-                          ₦{parseInt(amtStr).toLocaleString()}
-                        </Text>
-                        <Text style={styles.offlinePresetPrice}>Airtime</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </>
-            )}
-
-            {/* 4-digit PIN Input */}
-            <Text style={styles.offlineFieldLabel}>CreasPay 4-Digit Passcode</Text>
-            <TextInput
-              style={styles.offlinePinInput}
-              placeholder="••••"
-              placeholderTextColor={Colors.textMuted}
-              keyboardType="numeric"
-              maxLength={4}
-              secureTextEntry
-              value={offlinePin}
-              onChangeText={setOfflinePin}
-            />
-
-            {/* Action Button */}
-            <TouchableOpacity
-              style={[
-                styles.offlineActionBtn,
-                (!offlinePin || offlinePin.length < 4) && styles.offlineActionBtnDisabled,
-              ]}
-              disabled={!offlinePin || offlinePin.length < 4}
-              onPress={handleLaunchOfflineSms}
-              activeOpacity={0.85}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 12 }}
             >
-              <Ionicons name="flash" size={18} color="#000000" />
-              <Text style={styles.offlineActionBtnText}>
-                Launch Toll-Free SMS (₦0.00)
-              </Text>
-            </TouchableOpacity>
+              {/* Service Toggle: Data vs Airtime */}
+              <View style={styles.offlineToggleRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.offlineToggleBtn,
+                    offlineService === "data" && styles.offlineToggleBtnActive,
+                  ]}
+                  onPress={() => setOfflineService("data")}
+                >
+                  <Ionicons
+                    name="wifi"
+                    size={16}
+                    color={offlineService === "data" ? "#FFFFFF" : Colors.textMuted}
+                  />
+                  <Text
+                    style={[
+                      styles.offlineToggleText,
+                      offlineService === "data" && styles.offlineToggleTextActive,
+                    ]}
+                  >
+                    Data Bundle
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.offlineToggleBtn,
+                    offlineService === "airtime" && styles.offlineToggleBtnActive,
+                  ]}
+                  onPress={() => setOfflineService("airtime")}
+                >
+                  <Ionicons
+                    name="phone-portrait"
+                    size={16}
+                    color={offlineService === "airtime" ? "#FFFFFF" : Colors.textMuted}
+                  />
+                  <Text
+                    style={[
+                      styles.offlineToggleText,
+                      offlineService === "airtime" && styles.offlineToggleTextActive,
+                    ]}
+                  >
+                    Airtime
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Recipient Phone Input */}
+              <View style={{ marginBottom: 16 }}>
+                <View style={styles.offlineFieldHeaderRow}>
+                  <Text style={styles.offlineFieldLabel}>Recipient Phone Number</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const myNum = formatUserPhoneForInput(user?.phone_number || "");
+                      if (myNum) {
+                        setOfflineRecipientPhone(myNum);
+                        const detected = detectNigerianNetwork(myNum);
+                        if (detected) setOfflineNetwork(detected);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.offlineMyNumBtn}>My Number</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.offlineInputContainer}>
+                  <TextInput
+                    style={styles.offlineInput}
+                    placeholder="0801 234 5678"
+                    placeholderTextColor={Colors.textMuted}
+                    keyboardType="phone-pad"
+                    value={offlineRecipientPhone}
+                    onChangeText={(text) => {
+                      setOfflineRecipientPhone(text);
+                      const clean = text.replace(/\D/g, "");
+                      if (clean.length >= 4) {
+                        const detected = detectNigerianNetwork(clean);
+                        if (detected) {
+                          setOfflineNetwork(detected);
+                        }
+                      }
+                    }}
+                  />
+                  {offlineNetwork && (
+                    <View style={styles.offlineNetBadge}>
+                      <Text style={styles.offlineNetBadgeText}>{offlineNetwork}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {/* Network Selector */}
+              <Text style={styles.offlineFieldLabel}>Select Network</Text>
+              <View style={styles.offlineNetRow}>
+                {["MTN", "Airtel", "Glo", "9mobile"].map((net) => {
+                  const isSelected = offlineNetwork.toUpperCase() === net.toUpperCase();
+                  return (
+                    <TouchableOpacity
+                      key={net}
+                      style={[
+                        styles.offlineNetChip,
+                        isSelected && styles.offlineNetChipActive,
+                      ]}
+                      onPress={() => setOfflineNetwork(net)}
+                    >
+                      <Text
+                        style={[
+                          styles.offlineNetText,
+                          isSelected && styles.offlineNetTextActive,
+                        ]}
+                      >
+                        {net}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Bundle / Amount Selector */}
+              {offlineService === "data" ? (
+                <>
+                  <Text style={styles.offlineFieldLabel}>Choose Available Data Plan</Text>
+                  <View style={styles.offlinePresetsGrid}>
+                    {availableOfflinePlans.map((plan) => {
+                      const isSelected = offlineSelectedPlanId === plan.id;
+                      return (
+                        <TouchableOpacity
+                          key={plan.id}
+                          style={[
+                            styles.offlinePresetBox,
+                            isSelected && styles.offlinePresetBoxActive,
+                          ]}
+                          onPress={() => setOfflineSelectedPlanId(plan.id)}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.offlinePresetVol,
+                              isSelected && styles.offlinePresetVolActive,
+                            ]}
+                          >
+                            {plan.label}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.offlinePresetPrice,
+                              isSelected && styles.offlinePresetPriceActive,
+                            ]}
+                          >
+                            ₦{plan.price.toLocaleString()}
+                          </Text>
+                          <Text style={styles.offlinePresetValidity}>
+                            {plan.validity}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.offlineFieldLabel}>Airtime Amount</Text>
+                  <View style={styles.offlinePresetsGrid}>
+                    {["500", "1000", "2000", "5000"].map((amtStr) => {
+                      const isSelected = offlineAirtimeAmount === amtStr;
+                      return (
+                        <TouchableOpacity
+                          key={amtStr}
+                          style={[
+                            styles.offlinePresetBox,
+                            isSelected && styles.offlinePresetBoxActive,
+                          ]}
+                          onPress={() => setOfflineAirtimeAmount(amtStr)}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.offlinePresetVol,
+                              isSelected && styles.offlinePresetVolActive,
+                            ]}
+                          >
+                            ₦{parseInt(amtStr).toLocaleString()}
+                          </Text>
+                          <Text style={styles.offlinePresetValidity}>Airtime</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
+
+              {/* 4-digit PIN Input */}
+              <Text style={styles.offlineFieldLabel}>CreasPay 4-Digit Passcode</Text>
+              <TextInput
+                style={styles.offlinePinInput}
+                placeholder="••••"
+                placeholderTextColor={Colors.textMuted}
+                keyboardType="numeric"
+                maxLength={4}
+                secureTextEntry
+                value={offlinePin}
+                onChangeText={setOfflinePin}
+              />
+
+              {/* Action Button */}
+              <TouchableOpacity
+                style={[
+                  styles.offlineActionBtn,
+                  (!offlinePin || offlinePin.length < 4) && styles.offlineActionBtnDisabled,
+                ]}
+                disabled={!offlinePin || offlinePin.length < 4}
+                onPress={handleLaunchOfflineSms}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="paper-plane" size={16} color="#FFFFFF" />
+                <Text style={styles.offlineActionBtnText}>
+                  Send Toll-Free SMS (₦0.00)
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -1857,16 +2024,16 @@ const styles = StyleSheet.create({
   offlineBtn: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 215, 0, 0.15)",
+    backgroundColor: "rgba(162, 155, 254, 0.12)",
     borderWidth: 1,
-    borderColor: "rgba(255, 215, 0, 0.4)",
+    borderColor: "rgba(162, 155, 254, 0.25)",
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 14,
     gap: 4,
   },
   offlineBtnText: {
-    color: "#FFD700",
+    color: "#A29BFE",
     fontSize: 12,
     fontWeight: "700",
   },
@@ -1874,9 +2041,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "rgba(255, 215, 0, 0.08)",
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
     borderWidth: 1,
-    borderColor: "rgba(255, 215, 0, 0.25)",
+    borderColor: "rgba(255, 255, 255, 0.08)",
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -1892,7 +2059,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "rgba(255, 215, 0, 0.2)",
+    backgroundColor: "rgba(162, 155, 254, 0.14)",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1903,7 +2070,7 @@ const styles = StyleSheet.create({
   },
   offlineBannerSub: {
     fontSize: 11,
-    color: "rgba(255, 255, 255, 0.65)",
+    color: Colors.textMuted,
     marginTop: 2,
   },
   offlineSheet: {
@@ -1912,8 +2079,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 26,
     paddingHorizontal: 22,
     paddingTop: 20,
-    paddingBottom: 36,
+    paddingBottom: 28,
     width: "100%",
+    maxHeight: "90%",
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
   },
@@ -1927,11 +2095,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  offlineLightningCircle: {
+  offlineHeaderIconBox: {
     width: 38,
     height: 38,
-    borderRadius: 19,
-    backgroundColor: "#FFD700",
+    borderRadius: 12,
+    backgroundColor: "rgba(162, 155, 254, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(162, 155, 254, 0.25)",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1969,6 +2139,50 @@ const styles = StyleSheet.create({
     color: "#10B981",
     fontSize: 11,
     fontWeight: "700",
+  },
+  offlineFieldHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  offlineMyNumBtn: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#A29BFE",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: "rgba(162, 155, 254, 0.12)",
+    borderRadius: 6,
+  },
+  offlineInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.06)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    paddingHorizontal: 14,
+    height: 48,
+  },
+  offlineInput: {
+    flex: 1,
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  offlineNetBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: "rgba(108, 92, 231, 0.2)",
+    borderWidth: 1,
+    borderColor: "rgba(108, 92, 231, 0.4)",
+  },
+  offlineNetBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#A29BFE",
   },
   offlineToggleRow: {
     flexDirection: "row",
@@ -2021,8 +2235,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   offlineNetChipActive: {
-    backgroundColor: "rgba(255, 215, 0, 0.15)",
-    borderColor: "#FFD700",
+    backgroundColor: "rgba(108, 92, 231, 0.2)",
+    borderColor: Colors.primary,
   },
   offlineNetText: {
     fontSize: 12,
@@ -2030,18 +2244,20 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   offlineNetTextActive: {
-    color: "#FFD700",
+    color: "#FFFFFF",
     fontWeight: "800",
   },
   offlinePresetsGrid: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
     marginBottom: 16,
   },
   offlinePresetBox: {
-    flex: 1,
+    width: "31%",
+    flexGrow: 1,
     paddingVertical: 10,
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
     borderRadius: 12,
     backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderWidth: 1,
@@ -2061,9 +2277,17 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   offlinePresetPrice: {
-    fontSize: 10,
-    fontWeight: "600",
+    fontSize: 11,
+    fontWeight: "700",
     color: Colors.textMuted,
+    marginTop: 2,
+  },
+  offlinePresetPriceActive: {
+    color: "#A29BFE",
+  },
+  offlinePresetValidity: {
+    fontSize: 10,
+    color: "rgba(255, 255, 255, 0.4)",
     marginTop: 2,
   },
   offlinePinInput: {
@@ -2077,23 +2301,24 @@ const styles = StyleSheet.create({
     letterSpacing: 8,
     textAlign: "center",
     paddingVertical: 12,
-    marginBottom: 18,
+    marginBottom: 16,
   },
   offlineActionBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFD700",
-    paddingVertical: 15,
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
     borderRadius: 14,
     gap: 8,
   },
   offlineActionBtnDisabled: {
-    opacity: 0.4,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    opacity: 0.5,
   },
   offlineActionBtnText: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#000000",
+    color: "#FFFFFF",
   },
 });
