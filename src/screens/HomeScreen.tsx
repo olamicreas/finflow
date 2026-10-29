@@ -8,12 +8,15 @@ import {
   RefreshControl,
   Alert,
   Dimensions,
+  Modal,
+  Share,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
 import { Colors } from "../theme/colors";
-import { formatNGN } from "../utils/formatters";
-import { useFinFlow } from "../context/FinFlowContext";
+import { formatDate, formatNGN, formatUSD } from "../utils/formatters";
+import { useFinFlow, TransactionItemData } from "../context/FinFlowContext";
 import { TransactionItem } from "../components/TransactionItem";
 import { ArtisticCardArt } from "../components/ArtisticCardArt";
 import { CreasPayLogo } from "../components/CreasPayLogo";
@@ -62,6 +65,43 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const ngnBalance = ngnWallet?.balance ?? 0;
   const hasCard = cards.length > 0;
   const months = ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
+
+  const [selectedTxFilter, setSelectedTxFilter] = useState<"all" | "inflow" | "outflow" | "bills" | "rewards">("all");
+  const [selectedTx, setSelectedTx] = useState<TransactionItemData | null>(null);
+  const [txReceiptVisible, setTxReceiptVisible] = useState(false);
+  const [copiedRef, setCopiedRef] = useState(false);
+
+  const filteredTransactions = transactions.filter((tx) => {
+    const isCashback =
+      tx.type === "cashback" ||
+      tx.category === "reward" ||
+      (tx.narration || "").toLowerCase().includes("cashback");
+    const isInflow =
+      isCashback ||
+      tx.category === "inflow" ||
+      tx.type === "deposit" ||
+      tx.type === "refund";
+    const isBill =
+      tx.type === "bill_payment" ||
+      tx.category === "utility" ||
+      (tx.narration || "").toLowerCase().includes("payment:") ||
+      (tx.narration || "").toLowerCase().includes("data") ||
+      (tx.narration || "").toLowerCase().includes("airtime");
+    const isOutflow = !isInflow;
+
+    if (selectedTxFilter === "inflow") return isInflow;
+    if (selectedTxFilter === "outflow") return isOutflow;
+    if (selectedTxFilter === "bills") return isBill;
+    if (selectedTxFilter === "rewards") return isCashback;
+    return true;
+  });
+
+  const handleOpenReceipt = (tx: TransactionItemData) => {
+    Haptics.selectionAsync();
+    setSelectedTx(tx);
+    setCopiedRef(false);
+    setTxReceiptVisible(true);
+  };
 
   return (
     <ScrollView
@@ -362,38 +402,210 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
         {/* TRANSACTIONS SECTION */}
         <View style={[styles.sheetSectionHeader, { marginTop: 28 }]}>
-          <Text style={styles.sheetSectionTitle}>Transactions</Text>
-          <View style={styles.twoDotsBtn}>
-            <View style={styles.darkDot} />
-            <View style={styles.darkDot} />
+          <View>
+            <Text style={styles.sheetSectionTitle}>Transactions</Text>
+            <Text style={styles.sheetSectionSubtitle}>
+              {filteredTransactions.length} {filteredTransactions.length === 1 ? "activity" : "activities"}
+            </Text>
           </View>
         </View>
 
+        {/* Filter Pills */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterPillsContainer}
+        >
+          {[
+            { id: "all", label: "All" },
+            { id: "inflow", label: "Money In" },
+            { id: "outflow", label: "Money Out" },
+            { id: "bills", label: "Bills & Data" },
+            { id: "rewards", label: "Cashback" },
+          ].map((pill) => {
+            const isActive = selectedTxFilter === pill.id;
+            return (
+              <TouchableOpacity
+                key={pill.id}
+                style={[styles.filterPill, isActive && styles.filterPillActive]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setSelectedTxFilter(pill.id as any);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.filterPillText,
+                    isActive && styles.filterPillTextActive,
+                  ]}
+                >
+                  {pill.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
         <View style={styles.transactionsList}>
-          {transactions.length === 0 ? (
-            <View style={{ paddingVertical: 32, alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="receipt-outline" size={36} color={Colors.textOnSheetMuted} style={{ marginBottom: 8, opacity: 0.4 }} />
-              <Text style={{ fontSize: 14, fontWeight: "700", color: Colors.textOnSheet }}>No transactions yet</Text>
-              <Text style={{ fontSize: 12, color: Colors.textOnSheetMuted, marginTop: 4, textAlign: "center" }}>
-                Add funds via your dedicated virtual account or make a payment to see activity here.
+          {filteredTransactions.length === 0 ? (
+            <View style={{ paddingVertical: 36, alignItems: "center", justifyContent: "center" }}>
+              <Ionicons
+                name="receipt-outline"
+                size={36}
+                color={Colors.textOnSheetMuted}
+                style={{ marginBottom: 8, opacity: 0.4 }}
+              />
+              <Text style={{ fontSize: 14, fontWeight: "700", color: Colors.textOnSheet }}>
+                No {selectedTxFilter === "all" ? "" : selectedTxFilter} transactions found
+              </Text>
+              <Text style={{ fontSize: 12, color: Colors.textOnSheetMuted, marginTop: 4, textAlign: "center", paddingHorizontal: 20 }}>
+                {selectedTxFilter === "inflow"
+                  ? "Inbound transfers, bank deposits, and cashback rewards appear here."
+                  : selectedTxFilter === "bills"
+                  ? "Airtime, internet data, electricity, and cable payments appear here."
+                  : selectedTxFilter === "rewards"
+                  ? "Every time you purchase data or airtime, your cashback commissions appear here."
+                  : "All completed transactions and wallet activities will appear here in real time."}
               </Text>
             </View>
           ) : (
-            transactions.slice(0, 10).map((tx) => (
+            filteredTransactions.map((tx) => (
               <TransactionItem
                 key={tx.id}
                 transaction={tx}
-                onPress={() => {
-                  Alert.alert(
-                    "Transaction Details",
-                    `Reference: ${tx.reference}\nDescription: ${tx.narration}\nAmount: ${tx.currency} ${tx.amount.toLocaleString()}\nStatus: ${tx.status.toUpperCase()}`
-                  );
-                }}
+                onPress={() => handleOpenReceipt(tx)}
               />
             ))
           )}
         </View>
       </View>
+
+      {/* TRANSACTION RECEIPT MODAL */}
+      <Modal
+        visible={txReceiptVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setTxReceiptVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.receiptCard}>
+            {/* Header Close */}
+            <View style={styles.receiptHeader}>
+              <Text style={styles.receiptHeaderTitle}>Transaction Receipt</Text>
+              <TouchableOpacity
+                onPress={() => setTxReceiptVisible(false)}
+                style={styles.receiptCloseBtn}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={20} color={Colors.textOnSheet} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Status Icon & Amount */}
+            <View style={styles.receiptStatusBox}>
+              <View style={styles.receiptStatusIconCircle}>
+                <Ionicons name="checkmark" size={26} color="#10B981" />
+              </View>
+              <Text style={styles.receiptStatusText}>Transaction Successful</Text>
+              <Text style={styles.receiptAmount}>
+                {selectedTx?.currency === "USD" ? "$" : "₦"}
+                {selectedTx ? selectedTx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
+              </Text>
+
+              {/* Commission/Cashback highlight banner */}
+              {(selectedTx?.type === "cashback" || (selectedTx?.earnings_amount && selectedTx.earnings_amount > 0)) && (
+                <View style={styles.cashbackBanner}>
+                  <Ionicons name="sparkles" size={14} color="#10B981" style={{ marginRight: 5 }} />
+                  <Text style={styles.cashbackBannerText}>
+                    Cashback Reward: +₦{selectedTx.type === "cashback" ? selectedTx.amount.toFixed(2) : selectedTx.earnings_amount?.toFixed(2)}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Details Rows */}
+            <View style={styles.receiptDetailsBox}>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Transaction Type</Text>
+                <Text style={styles.receiptValue}>
+                  {selectedTx?.type?.replace(/_/g, " ").toUpperCase() || "PAYMENT"}
+                </Text>
+              </View>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Description</Text>
+                <Text style={[styles.receiptValue, { flex: 1, textAlign: "right" }]} numberOfLines={2}>
+                  {selectedTx?.narration}
+                </Text>
+              </View>
+              {selectedTx?.counterparty_name && (
+                <View style={styles.receiptRow}>
+                  <Text style={styles.receiptLabel}>Recipient / Provider</Text>
+                  <Text style={styles.receiptValue}>{selectedTx.counterparty_name}</Text>
+                </View>
+              )}
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Date & Time</Text>
+                <Text style={styles.receiptValue}>
+                  {selectedTx ? formatDate(selectedTx.created_at) : ""}
+                </Text>
+              </View>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Reference</Text>
+                <TouchableOpacity
+                  onPress={async () => {
+                    if (selectedTx?.reference) {
+                      await Clipboard.setStringAsync(selectedTx.reference);
+                      setCopiedRef(true);
+                      showToast("Reference copied");
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      setTimeout(() => setCopiedRef(false), 2500);
+                    }
+                  }}
+                  style={styles.copyRefBtn}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.receiptRefText} numberOfLines={1}>
+                    {selectedTx?.reference}
+                  </Text>
+                  <Ionicons
+                    name={copiedRef ? "checkmark-circle" : "copy-outline"}
+                    size={14}
+                    color={copiedRef ? Colors.success : Colors.primary}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.receiptActions}>
+              <TouchableOpacity
+                style={styles.shareReceiptBtn}
+                onPress={async () => {
+                  if (!selectedTx) return;
+                  try {
+                    await Share.share({
+                      message: `CreasPay Transaction Receipt\n--------------------------------\nReference: ${selectedTx.reference}\nAmount: ${selectedTx.currency} ${selectedTx.amount.toLocaleString()}\nStatus: SUCCESSFUL\nDate: ${formatDate(selectedTx.created_at)}\nDescription: ${selectedTx.narration}\nChannel: CreasPay Instant Rails`,
+                    });
+                  } catch (e) {}
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="share-outline" size={18} color="#0B0B12" style={{ marginRight: 6 }} />
+                <Text style={styles.shareReceiptBtnText}>Share Receipt</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.doneReceiptBtn}
+                onPress={() => setTxReceiptVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.doneReceiptBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -839,6 +1051,181 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   transactionsList: {
+    marginTop: 8,
+  },
+  sheetSectionSubtitle: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: Colors.textOnSheetMuted,
     marginTop: 2,
+  },
+  filterPillsContainer: {
+    flexDirection: "row",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 2,
+  },
+  filterPill: {
+    paddingVertical: 7,
+    paddingHorizontal: 15,
+    borderRadius: 20,
+    backgroundColor: Colors.sheetSurface,
+    borderWidth: 1,
+    borderColor: Colors.sheetBorder,
+  },
+  filterPillActive: {
+    backgroundColor: "#0B0B12",
+    borderColor: "#0B0B12",
+  },
+  filterPillText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: Colors.textOnSheetSecondary,
+  },
+  filterPillTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "flex-end",
+  },
+  receiptCard: {
+    backgroundColor: Colors.sheetBackground,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingHorizontal: 22,
+    paddingTop: 18,
+    paddingBottom: 36,
+  },
+  receiptHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  receiptHeaderTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: Colors.textOnSheet,
+  },
+  receiptCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.sheetSurface,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  receiptStatusBox: {
+    alignItems: "center",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.sheetBorder,
+  },
+  receiptStatusIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "rgba(16, 185, 129, 0.12)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  receiptStatusText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#10B981",
+    marginBottom: 4,
+  },
+  receiptAmount: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: Colors.textOnSheet,
+    letterSpacing: -0.5,
+  },
+  cashbackBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(16, 185, 129, 0.10)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    marginTop: 10,
+  },
+  cashbackBannerText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#10B981",
+  },
+  receiptDetailsBox: {
+    paddingVertical: 14,
+    gap: 13,
+  },
+  receiptRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  receiptLabel: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: Colors.textOnSheetMuted,
+  },
+  receiptValue: {
+    fontSize: 13.5,
+    fontWeight: "600",
+    color: Colors.textOnSheet,
+  },
+  copyRefBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.sheetSurface,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    maxWidth: "60%",
+  },
+  receiptRefText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Colors.textOnSheet,
+    fontFamily: "monospace",
+  },
+  receiptActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 18,
+  },
+  shareReceiptBtn: {
+    flex: 1,
+    flexDirection: "row",
+    height: 50,
+    backgroundColor: Colors.sheetSurface,
+    borderWidth: 1,
+    borderColor: Colors.sheetBorder,
+    borderRadius: 25,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  shareReceiptBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: Colors.textOnSheet,
+  },
+  doneReceiptBtn: {
+    flex: 1,
+    height: 50,
+    backgroundColor: "#0B0B12",
+    borderRadius: 25,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  doneReceiptBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
 });
